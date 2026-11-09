@@ -1,0 +1,17 @@
+{
+  "name": "@elchdl/focus-reader",
+  "private": true,
+  "type": "module",
+  "description": "<focus-reader>: a text read a few words at a time, like subtitles, in a panel with its pace, size and progress. No dependency, no framework.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./element": "./src/element.ts",
+    "./text": "./src/text.ts"
+  },
+  "scripts": {
+    "check": "tsc -p ."
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
