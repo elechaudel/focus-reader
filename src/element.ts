@@ -1,5 +1,10 @@
 // <focus-reader>: a text read a few words at a time, like subtitles, at a chosen pace.
 //
+// Two views of the same reading. Sequence shows one frame at a time on a band between two rulers, as an e-ink
+// reader would. Flow shows the whole text, as Spotify shows lyrics: the words ahead faint, the words read a step
+// darker, the frame being read in ink and underlined, the text moving up a line at a time so the line being read
+// stays at the same height. Both run on the same frames, timing, settings and controls.
+//
 // It reads its text from the page (the element `for` names, else a <template> inside it, else its own content)
 // and shows it in a panel: the title on top, then the settings (speed, words per frame, size, alignment), the
 // reading band between two rulers, and at the bottom what has been read, what is left and how long it takes at
@@ -15,6 +20,14 @@ import { blocksFromElement, blocksFromText, frameAt, frames, orp, parse, schedul
 
 export type Align = 'left' | 'center' | 'pivot';
 export type Size = 's' | 'm' | 'l' | 'xl';
+export type View = 'sequence' | 'flow';
+
+const VIEWS: View[] = ['sequence', 'flow'];
+const VIEW_LABEL: Record<View, string> = { sequence: 'Sequence', flow: 'Flow' };
+/** Flow's text size, in px: a base plus a share of the panel's width (it wraps, so nothing has to fit a line) */
+const FLOW_SIZE: Record<Size, [number, number]> = { s: [16, 0.012], m: [18, 0.018], l: [20, 0.026], xl: [22, 0.036] };
+/** where the line being read rests in Flow, as a share of the window's height */
+const FLOW_ANCHOR = 0.38;
 
 const SIZES: Size[] = ['s', 'm', 'l', 'xl'];
 /** text size as a share of the panel (its width, at least 560 px, or 1.6 × its height if that is smaller) */
@@ -48,6 +61,8 @@ const STYLE = `
   --fr-muted: color-mix(in srgb, CanvasText 62%, Canvas);
   --fr-faint: color-mix(in srgb, CanvasText 38%, Canvas);
   --fr-rule: color-mix(in srgb, CanvasText 22%, Canvas);
+  /* Flow's words ahead: fainter than faint, so the words read (muted) stand apart in both themes */
+  --fr-ahead: color-mix(in srgb, var(--fr-faint) 70%, var(--fr-paper));
   --fr-accent: #3b64ea;
   --fr-accent-text: var(--fr-accent);
   --fr-on-ink: var(--fr-paper);
@@ -131,7 +146,7 @@ dialog .fr::after {
 .band { grid-row: 2; position: relative; outline: none; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
 .below { grid-row: 3; min-height: 0; overflow: hidden; display: grid; align-content: start; gap: 10px; padding-top: 14px; }
 /* open, or once used on the page, a drag on the band goes back or on instead of scrolling the page */
-dialog .band, .engaged .band { touch-action: none; }
+dialog .band, .engaged .band, dialog .flow, .engaged .flow { touch-action: none; }
 /* open on a phone: nothing in the panel scrolls, so Safari never brings its bars back */
 dialog, dialog .fr { overscroll-behavior: none; touch-action: none; }
 dialog button, dialog .seek { touch-action: manipulation; }
@@ -216,7 +231,29 @@ dialog button, dialog .seek { touch-action: manipulation; }
   .context { -webkit-line-clamp: 2; }
   .below { padding-top: 8px; }
 }
+/* Flow: the whole text between the rulers, moving up a line at a time */
+.flow { display: none; grid-row: 1 / -1; min-height: 0; outline: none; touch-action: manipulation; user-select: none; -webkit-user-select: none; padding: 16px 0; }
+[data-view='flow'] .band, [data-view='flow'] .below, [data-view='flow'] .align-setting { display: none; }
+[data-view='flow'] .flow { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.flow:focus-visible .window { outline: 1px dotted var(--fr-ink); outline-offset: -1px; }
+.playing .flow:focus-visible .window { outline: none; }
+.window { position: relative; overflow: hidden; }
+.window .mark { left: var(--marker); top: calc(var(--anchor) - 4px); width: 9px; height: 9px; margin-left: -28px; background: var(--fr-accent); }
+.window .mark::after { display: none; }
+.text {
+  position: absolute; left: var(--marker); right: 8px; top: 0; max-width: 24em;
+  font-family: var(--fr-font-text); font-weight: 600; font-size: var(--flow-size); line-height: 1.22;
+  transform: translateY(var(--y, 0px)); transition: transform 0.35s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.text.instant { transition: none; }
+.text p { margin: 0 0 0.75em; }
+.text .w { color: var(--fr-ahead); transition: color 0.15s ease; cursor: pointer; }
+.text .w.read { color: var(--fr-muted); }
+.text .w.now { color: var(--fr-ink); text-decoration: underline; text-decoration-color: var(--fr-accent); text-decoration-thickness: 0.1em; text-underline-offset: 0.16em; text-decoration-skip-ink: none; }
+.text .h .w.read, .text .h .w.now { color: var(--fr-accent-text); }
+
 @media (prefers-reduced-motion: reduce) {
+  .text, .text .w { transition: none; }
   .fade { transition: none; }
   .ghost.on { animation: none; }
 }
@@ -232,6 +269,8 @@ const HTML = `
     </div>
     <div class="rule fade"></div>
     <div class="settings label fade" role="group" aria-label="Settings">
+      <span class="setting"><span>View</span>
+        <button type="button" class="align" data-act="view"></button></span>
       <span class="setting"><span id="l-wpm">Speed</span>
         <button type="button" class="step" data-act="wpm-" aria-label="Slower">−</button>
         <span class="value" data-wpm aria-labelledby="l-wpm"></span>
@@ -244,7 +283,7 @@ const HTML = `
         <button type="button" class="step" data-act="size-" aria-label="Smaller text">−</button>
         <span class="value" data-size></span>
         <button type="button" class="step" data-act="size+" aria-label="Larger text">+</button></span>
-      <span class="setting"><span>Align</span>
+      <span class="setting align-setting"><span>Align</span>
         <button type="button" class="align" data-act="align"></button></span>
     </div>
   </div>
@@ -257,6 +296,12 @@ const HTML = `
     </div>
     <div class="below">
       <p class="context" data-context></p>
+    </div>
+    <div class="flow" data-flow tabindex="0" role="group" aria-roledescription="reader"
+      aria-label="Reading flow. Space to play or pause, left and right arrows to move by sentence, up and down arrows for speed, click a word to go to it.">
+      <div class="ruler up" aria-hidden="true"></div>
+      <div class="window" aria-hidden="true"><span class="mark"></span><div class="text" data-text></div></div>
+      <div class="ruler down" aria-hidden="true"></div>
     </div>
   </div>
   <div class="bottom">
@@ -282,6 +327,7 @@ interface Settings {
   words: number;
   size: Size;
   align: Align;
+  view: View;
 }
 
 /**
@@ -295,7 +341,7 @@ interface Settings {
  * Events: `focusreaderopen`, `focusreaderclose`.
  */
 export class FocusReader extends HTMLElement {
-  static observedAttributes = ['heading', 'name', 'for'];
+  static observedAttributes = ['heading', 'name', 'for', 'view'];
 
   #root: ShadowRoot;
   #q = <T extends Element = HTMLElement>(s: string) => this.#root.querySelector<T>(s)!;
@@ -303,6 +349,14 @@ export class FocusReader extends HTMLElement {
   #slot: HTMLElement;
   #dialog: HTMLDialogElement;
   #band: HTMLElement;
+  #flow: HTMLElement;
+  #text: HTMLElement;
+  /** Flow's words, one span each, built when Flow first shows a text */
+  #wordEls: HTMLElement[] = [];
+  /** Flow's state on screen: words marked read, the frame marked now, the line it rests on */
+  #flowRead = 0;
+  #flowNow: [number, number] = [0, 0];
+  #flowTop = -1;
   #stage: HTMLElement;
   #chunk: HTMLElement;
   #ghost: HTMLElement;
@@ -316,7 +370,7 @@ export class FocusReader extends HTMLElement {
   #ms: number[] = [];
   #after: number[] = [];
   #i = 0;
-  #s: Settings = { wpm: 150, words: 1, size: 'm', align: 'left' };
+  #s: Settings = { wpm: 150, words: 1, size: 'm', align: 'left', view: 'sequence' };
   /** the size shown: the one chosen, or smaller if the words per frame need it */
   #effSize: Size = 'm';
   /** text size in px for the size shown */
@@ -347,6 +401,8 @@ export class FocusReader extends HTMLElement {
     this.#slot = this.#q('.slot');
     this.#dialog = this.#q<HTMLDialogElement>('[data-dialog]');
     this.#band = this.#q('[data-band]');
+    this.#flow = this.#q('[data-flow]');
+    this.#text = this.#q('[data-text]');
     this.#stage = this.#q('.stage');
     this.#chunk = this.#q('[data-chunk]');
     this.#ghost = this.#q('[data-ghost]');
@@ -363,7 +419,10 @@ export class FocusReader extends HTMLElement {
     s.words = clampWords(Number(a('words')) || s.words);
     if (SIZES.includes(a('size') as Size)) s.size = a('size') as Size;
     if (ALIGNS.includes(a('align') as Align)) s.align = a('align') as Align;
+    if (VIEWS.includes(a('view') as View)) s.view = a('view') as View;
     if (this.hasAttribute('persist')) Object.assign(s, this.#restore());
+    // the view reads back as an attribute, for the page to show which one is on
+    if (this.getAttribute('view') !== s.view) this.setAttribute('view', s.view);
 
     this.#labels();
     this.#load();
@@ -390,6 +449,11 @@ export class FocusReader extends HTMLElement {
 
   attributeChangedCallback(name: string) {
     if (!this.isConnected) return;
+    if (name === 'view') {
+      const v = this.getAttribute('view') as View;
+      if (VIEWS.includes(v) && v !== this.#s.view) this.#set({ view: v }, `${VIEW_LABEL[v]} view`);
+      return;
+    }
     if (name === 'for') {
       this.#load();
       this.#layout();
@@ -435,7 +499,7 @@ export class FocusReader extends HTMLElement {
     this.#engage(true);
     this.#labels();
     this.#layout();
-    this.#band.focus();
+    this.#target().focus();
     this.#wake();
     this.dispatchEvent(new CustomEvent('focusreaderopen', { bubbles: true }));
   }
@@ -508,6 +572,8 @@ export class FocusReader extends HTMLElement {
     }
     const word = keep ? (this.#frames[this.#i]?.start ?? 0) : 0;
     this.#doc = parse(blocks);
+    this.#wordEls = [];
+    this.#text.textContent = '';
     if (!keep) {
       this.#started = false;
       this.#done = false;
@@ -618,8 +684,14 @@ export class FocusReader extends HTMLElement {
     const w = this.#fr.clientWidth;
     const h = this.#fr.clientHeight;
     if (!w || !h) return;
+    this.#fr.dataset.view = this.#s.view;
     this.#fit();
-    this.#fr.style.setProperty('--marker', `${MARKER[this.#s.align] * 100}%`);
+    this.#fr.style.setProperty('--marker', `${MARKER[this.#s.view === 'flow' ? 'left' : this.#s.align] * 100}%`);
+    if (this.#s.view === 'flow') {
+      const [base, share] = FLOW_SIZE[this.#s.size];
+      this.#fr.style.setProperty('--flow-size', `${Math.round(base + share * w)}px`);
+      this.#flowTop = -1;
+    }
     this.#show(false);
   }
 
@@ -665,7 +737,8 @@ export class FocusReader extends HTMLElement {
   /** Words per frame and size depend on each other: keep the words, step the size down until most frames fit. */
   #fit() {
     let i = SIZES.indexOf(this.#s.size);
-    while (i > 0 && !this.#fits(this.#s.words, SIZES[i])) i--;
+    // Flow wraps its lines: any number of words fits at any size
+    while (this.#s.view === 'sequence' && i > 0 && !this.#fits(this.#s.words, SIZES[i])) i--;
     this.#px = this.#sizePx(SIZES[i]);
     this.#fr.style.setProperty('--size', `${this.#px}px`);
     this.#effSize = SIZES[i];
@@ -673,6 +746,11 @@ export class FocusReader extends HTMLElement {
   }
 
   #show(advance: boolean) {
+    if (this.#s.view === 'flow') {
+      this.#showFlow();
+      this.#stats();
+      return;
+    }
     const f = this.#frames[this.#i];
     const chunk = this.#chunk;
     if (advance && !reducedMotion() && chunk.textContent) {
@@ -720,6 +798,70 @@ export class FocusReader extends HTMLElement {
     this.#fr.style.setProperty('--marker-x', align === 'left' ? `${Math.round(marker)}px` : '0px');
     this.#stats();
     if (!this.#playing) this.#showContext();
+  }
+
+  /** The element that takes the focus for the view shown. */
+  #target() {
+    return this.#s.view === 'flow' ? this.#flow : this.#band;
+  }
+
+  /** Flow's text: one paragraph per block, one span per word, built once per text. */
+  #buildFlow() {
+    const { blocks, words } = this.#doc;
+    const out = document.createDocumentFragment();
+    const els: HTMLElement[] = [];
+    let p: HTMLElement | null = null;
+    let block = -1;
+    words.forEach((w, i) => {
+      if (w.block !== block) {
+        block = w.block;
+        p = document.createElement('p');
+        if (blocks[block].kind === 'heading') p.className = 'h';
+        out.append(p);
+      } else p!.append(' ');
+      const span = document.createElement('span');
+      span.className = 'w';
+      span.dataset.i = String(i);
+      span.textContent = w.text;
+      p!.append(span);
+      els.push(span);
+    });
+    this.#text.textContent = '';
+    this.#text.append(out);
+    this.#wordEls = els;
+    this.#flowRead = 0;
+    this.#flowNow = [0, 0];
+    this.#flowTop = -1;
+  }
+
+  /** Marks what has been read and the frame being read, and moves the text so its line rests on the anchor. */
+  #showFlow() {
+    if (!this.#wordEls.length && this.#doc.words.length) this.#buildFlow();
+    const els = this.#wordEls;
+    const f = this.#frames[this.#i];
+    if (!f) return;
+    const read = this.#done ? els.length : this.#started ? f.start : 0;
+    const now: [number, number] = this.#done ? [0, 0] : [f.start, f.end];
+    // only the words whose state changed
+    const [a, b] = this.#flowNow;
+    for (let k = a; k < b; k++) els[k]?.classList.remove('now');
+    if (read > this.#flowRead) for (let k = this.#flowRead; k < read; k++) els[k].classList.add('read');
+    else for (let k = read; k < this.#flowRead; k++) els[k].classList.remove('read');
+    for (let k = now[0]; k < now[1]; k++) els[k].classList.add('now');
+    this.#flowRead = read;
+    this.#flowNow = now;
+
+    const first = els[f.start];
+    const win = this.#text.parentElement!;
+    const anchor = Math.round(win.clientHeight * FLOW_ANCHOR);
+    this.#fr.style.setProperty('--anchor', `${anchor}px`);
+    const top = first.offsetTop;
+    if (top === this.#flowTop) return;
+    // a jump (a new text, a resize, a seek far away) moves at once; reading on moves a line, smoothly
+    const far = this.#flowTop < 0 || Math.abs(top - this.#flowTop) > first.offsetHeight * 3;
+    this.#text.classList.toggle('instant', far);
+    this.#flowTop = top;
+    this.#text.style.setProperty('--y', `${Math.round(anchor - top - first.offsetHeight / 2)}px`);
   }
 
   /** While paused: the whole sentence under the band, the frame in it marked, to read back if needed. */
@@ -773,7 +915,9 @@ export class FocusReader extends HTMLElement {
     q('[data-act="wpm-"]').disabled = s.wpm <= WPM_MIN;
     q('[data-act="wpm+"]').disabled = s.wpm >= WPM_MAX;
     q('[data-act="words-"]').disabled = s.words <= 1;
-    q('[data-act="words+"]').disabled = s.words >= WORDS_MAX || !this.#fits(s.words + 1, 's');
+    q('[data-act="words+"]').disabled = s.words >= WORDS_MAX || (s.view === 'sequence' && !this.#fits(s.words + 1, 's'));
+    q('[data-act="view"]').textContent = VIEW_LABEL[s.view];
+    q('[data-act="view"]').setAttribute('aria-label', `View: ${VIEW_LABEL[s.view]}. Change`);
     q('[data-act="size-"]').disabled = this.#effSize === 's';
     q('[data-act="size+"]').disabled = this.#effSize === 'xl';
   }
@@ -787,7 +931,7 @@ export class FocusReader extends HTMLElement {
     Object.assign(s, change);
     if (change.size) {
       // a larger size makes room by taking words off the frame (more words, in turn, step the size down: #fit)
-      while (s.words > 1 && !this.#fits(s.words, s.size)) s.words--;
+      while (s.view === 'sequence' && s.words > 1 && !this.#fits(s.words, s.size)) s.words--;
     }
     if (s.words !== before) this.#reframe(word);
     else this.#retime();
@@ -795,6 +939,11 @@ export class FocusReader extends HTMLElement {
     this.#layout();
     this.#store();
     this.#say(say);
+    if (change.view) {
+      if (this.getAttribute('view') !== change.view) this.setAttribute('view', change.view);
+      if (this.#root.activeElement === this.#band || this.#root.activeElement === this.#flow) this.#target().focus();
+      this.dispatchEvent(new CustomEvent('focusreaderview', { bubbles: true, detail: { view: change.view } }));
+    }
   }
 
   #act(act: string) {
@@ -818,6 +967,10 @@ export class FocusReader extends HTMLElement {
       case 'size+': {
         const size = SIZES[Math.max(0, Math.min(SIZES.length - 1, i + (act === 'size+' ? 1 : -1)))];
         return this.#set({ size }, `Size ${size.toUpperCase()}`);
+      }
+      case 'view': {
+        const view = VIEWS[(VIEWS.indexOf(s.view) + 1) % VIEWS.length];
+        return this.#set({ view }, `${VIEW_LABEL[view]} view`);
       }
       case 'align': {
         const align = ALIGNS[(ALIGNS.indexOf(s.align) + 1) % ALIGNS.length];
@@ -843,6 +996,7 @@ export class FocusReader extends HTMLElement {
       if (typeof v.words === 'number') out.words = clampWords(v.words);
       if (SIZES.includes(v.size)) out.size = v.size;
       if (ALIGNS.includes(v.align)) out.align = v.align;
+      if (VIEWS.includes(v.view)) out.view = v.view;
       return out;
     } catch {
       return {};
@@ -864,12 +1018,43 @@ export class FocusReader extends HTMLElement {
     });
     // the band: the middle plays or pauses, the sides go a sentence back or on. A first tap on a quiet panel only
     // brings the labels back.
-    this.#band.addEventListener('pointerdown', (e) => {
+    for (const el of [this.#band, this.#flow]) this.#gestures(el);
+    this.#fr.addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'mouse') this.#wake();
+    });
+    this.#fr.addEventListener('pointerdown', () => this.#wake());
+    this.#fr.addEventListener('focusin', () => {
+      this.#engage(true);
+      this.#wake();
+    });
+    // open on a phone, Safari brings its bars back on any scroll, even of a page that cannot move: none here
+    this.#dialog.addEventListener(
+      'touchmove',
+      (e) => {
+        if (e.target !== this.#seek) e.preventDefault();
+      },
+      { passive: false },
+    );
+    this.#seek.addEventListener('input', () => this.#go(Number(this.#seek.value)));
+    this.#dialog.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      this.close();
+    });
+  }
+
+  /**
+   * Taps, drags and scrolls on the band or the flow. A tap: in Sequence, the middle plays or pauses and the sides
+   * go a sentence back or on; in Flow, a word goes there (the frame being read plays or pauses), and elsewhere it
+   * plays or pauses. A drag or a scroll goes a frame back or on. A first tap on a quiet panel only brings the
+   * labels back.
+   */
+  #gestures(el: HTMLElement) {
+    el.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse') return;
       this.#drag = { x: e.clientX, y: e.clientY, done: 0, moved: false };
     });
     // a drag on a touch screen goes a frame back or on every SWIPE_STEP px: up or left is on, down or right back
-    this.#band.addEventListener('pointermove', (e) => {
+    el.addEventListener('pointermove', (e) => {
       const d = this.#drag;
       if (!d || e.pointerType === 'mouse') return;
       const dx = e.clientX - d.x;
@@ -883,8 +1068,8 @@ export class FocusReader extends HTMLElement {
         d.done = steps;
       }
     });
-    this.#band.addEventListener('pointercancel', () => (this.#drag = null));
-    this.#band.addEventListener('pointerup', (e) => {
+    el.addEventListener('pointercancel', () => (this.#drag = null));
+    el.addEventListener('pointerup', (e) => {
       if (e.button !== 0) return;
       const dragged = this.#drag?.moved;
       this.#drag = null;
@@ -892,22 +1077,22 @@ export class FocusReader extends HTMLElement {
       const wasQuiet = this.#fr.classList.contains('quiet');
       this.#wake();
       if (wasQuiet && e.pointerType !== 'mouse') return;
-      const r = this.#band.getBoundingClientRect();
+      if (el === this.#flow) {
+        const w = (e.target as Element).closest<HTMLElement>('.w');
+        const f = this.#frames[this.#i];
+        const i = w ? Number(w.dataset.i) : -1;
+        if (i < 0 || (f && i >= f.start && i < f.end)) this.toggle();
+        else this.#go(i);
+        return;
+      }
+      const r = el.getBoundingClientRect();
       const x = (e.clientX - r.left) / r.width;
       if (x < 0.25) this.#back();
       else if (x > 0.75) this.#forward();
       else this.toggle();
     });
-    this.#fr.addEventListener('pointermove', (e) => {
-      if (e.pointerType === 'mouse') this.#wake();
-    });
-    this.#fr.addEventListener('pointerdown', () => this.#wake());
-    this.#fr.addEventListener('focusin', () => {
-      this.#engage(true);
-      this.#wake();
-    });
-    // a scroll on the band goes a frame back or on, as a drag does: down or right is on
-    this.#band.addEventListener(
+    // a scroll goes a frame back or on, as a drag does: down or right is on
+    el.addEventListener(
       'wheel',
       (e) => {
         if (!this.#dialog.open && !this.#engaged) return;
@@ -923,19 +1108,6 @@ export class FocusReader extends HTMLElement {
       },
       { passive: false },
     );
-    // open on a phone, Safari brings its bars back on any scroll, even of a page that cannot move: none here
-    this.#dialog.addEventListener(
-      'touchmove',
-      (e) => {
-        if (e.target !== this.#seek) e.preventDefault();
-      },
-      { passive: false },
-    );
-    this.#seek.addEventListener('input', () => this.#go(Number(this.#seek.value)));
-    this.#dialog.addEventListener('cancel', (e) => {
-      e.preventDefault();
-      this.close();
-    });
   }
 
   /**
@@ -1007,7 +1179,7 @@ export class FocusReader extends HTMLElement {
     this.#quietTimer = window.setTimeout(() => {
       // keep them while the keyboard is on a control, so focus never sits on something invisible
       const active = this.#root.activeElement;
-      if (active && active !== this.#band) return;
+      if (active && active !== this.#band && active !== this.#flow) return;
       if (this.#playing) this.#fr.classList.add('quiet');
     }, QUIET_AFTER);
   }

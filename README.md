@@ -13,9 +13,10 @@
 - `for`: id of the element whose text it reads (an article's body, a `<template>`). Without it, a `<template>` inside the element, or else its own content. Paragraphs, headings, list items and quotes are read; code blocks, figures, media, tables and anything with `data-focus-skip` are not.
 - `heading`: the title at the top. `name`: the label before it (default "Focus reader").
 - `wpm` (100–800, default 150), `words` per frame (1–6, default 1), `size` (`s`, `m`, `l`, `xl`, default `m`), `align` (`left` on a marker, `center` like subtitles, `pivot` on the recognition point as Spritz does).
+- `view`: `sequence` (default), one frame at a time on a band, or `flow`, the whole text with the frame being read marked, moving up a line at a time like song lyrics. It reflects the view shown, and changing it switches.
 - `modal`: hidden until opened. Without it, the reader sits in the page, filling its box, and opens to the full window from its own button.
 - `persist`: remembers the settings in this browser (`localStorage`).
-- Methods: `open()`, `close()`, `play()`, `pause()`, `toggle()`, `reload()`. Events: `focusreaderopen`, `focusreaderclose`.
+- Methods: `open()`, `close()`, `play()`, `pause()`, `toggle()`, `reload()`. Events: `focusreaderopen`, `focusreaderclose`, `focusreaderview` (`detail.view`).
 
 ## Style
 
@@ -24,7 +25,8 @@ Everything comes from custom properties on the element, with system defaults (`C
 | Property | |
 |---|---|
 | `--fr-paper`, `--fr-ink` | background and text |
-| `--fr-muted`, `--fr-faint`, `--fr-rule` | labels, minor ticks, outlines |
+| `--fr-muted`, `--fr-faint`, `--fr-rule` | labels, minor ticks, outlines; in Flow, the words read |
+| `--fr-ahead` | Flow's words ahead (default: `--fr-faint` mixed 70 % into `--fr-paper`) |
 | `--fr-accent`, `--fr-accent-text` | markers and progress, and the accent as text (pivot letter, headings) |
 | `--fr-on-ink` | text on the solid ink button |
 | `--fr-font-text`, `--fr-font-label`, `--fr-font-figure` | the words, the labels, the figures |
