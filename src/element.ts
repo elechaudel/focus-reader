@@ -977,18 +977,32 @@ export class FocusReader extends HTMLElement {
     return true;
   }
 
-  /** The first word of the line that holds `y`, in the text's own coordinates. */
+  /**
+   * The word at `y`, in the text's own coordinates, as a scroll goes through it: from the middle of one line to
+   * the middle of the next, each word of the line takes its share of the way, so every word, and every frame,
+   * passes under the anchor in turn (taking only each line's first word skipped the frames that start mid-line).
+   */
   #wordAt(y: number) {
     const els = this.#wordEls;
+    const mid = (e: HTMLElement) => e.offsetTop + e.offsetHeight / 2;
+    // the first word whose line's middle is below y: it starts the next line
     let lo = 0;
-    let hi = els.length - 1;
+    let hi = els.length;
     while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (els[mid].offsetTop + els[mid].offsetHeight > y) hi = mid;
-      else lo = mid + 1;
+      const m = (lo + hi) >> 1;
+      if (mid(els[m]) > y) hi = m;
+      else lo = m + 1;
     }
-    while (lo > 0 && els[lo - 1].offsetTop === els[lo].offsetTop) lo--;
-    return lo;
+    if (lo === 0) return 0;
+    const top = els[lo - 1].offsetTop;
+    let a = lo - 1;
+    while (a > 0 && els[a - 1].offsetTop === top) a--;
+    let z = lo;
+    while (z < els.length && els[z].offsetTop === top) z++;
+    const from = mid(els[a]);
+    const to = z < els.length ? mid(els[z]) : from + els[a].offsetHeight;
+    const t = Math.min(0.999, Math.max(0, (y - from) / (to - from)));
+    return a + Math.floor(t * (z - a));
   }
 
   /** While paused: the whole sentence under the band, the frame in it marked, to read back if needed. */
