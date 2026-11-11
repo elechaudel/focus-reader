@@ -1287,19 +1287,26 @@ export class FocusReader extends HTMLElement {
     if (!inside && !this.#dialog.open && !this.#engaged) return;
     const t = path[0] as HTMLElement;
     if (!inside && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName ?? ''))) return;
-    this.#key(e, t);
+    this.#key(e);
   };
 
-  #onPointerDown = (e: PointerEvent) => this.#engage(e.composedPath().includes(this.#fr));
+  /**
+   * A press inside the panel engages it; one elsewhere lets the keys go back to the page, except inside an
+   * element around it marked `data-focus-reader-scope` (a page's own controls for it, as the Lab's playground).
+   */
+  #onPointerDown = (e: PointerEvent) => {
+    const path = e.composedPath();
+    const scope = this.closest('[data-focus-reader-scope]');
+    this.#engage(path.includes(this.#fr) || (!!scope && path.includes(scope)));
+  };
 
   #engage(on: boolean) {
     this.#engaged = on;
     this.#fr.classList.toggle('engaged', on);
   }
 
-  #key(e: KeyboardEvent, target: EventTarget) {
+  #key(e: KeyboardEvent) {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    const onSeek = target === this.#seek;
     this.#wake();
     switch (e.key) {
       case ' ':
@@ -1307,23 +1314,20 @@ export class FocusReader extends HTMLElement {
         e.preventDefault();
         this.toggle();
         break;
+      // on the progress slider too, so ← → always go a sentence, never a word as a slider's own keys would
       case 'ArrowLeft':
-        if (onSeek) return;
         e.preventDefault();
         this.#back();
         break;
       case 'ArrowRight':
-        if (onSeek) return;
         e.preventDefault();
         this.#forward();
         break;
       case 'ArrowUp':
-        if (onSeek) return;
         e.preventDefault();
         this.#act('wpm+');
         break;
       case 'ArrowDown':
-        if (onSeek) return;
         e.preventDefault();
         this.#act('wpm-');
         break;
