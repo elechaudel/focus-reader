@@ -30,7 +30,11 @@ const WPM_STEP = 25;
 const WORDS_MAX = 6;
 /** how long the labels stay after the last move while it plays, ms */
 const QUIET_AFTER = 2500;
-const STORE = 'focus-reader';
+/** settings kept in this browser; the version changes when the defaults do, so a new default is seen */
+const STORE = 'focus-reader.v2';
+/** how far a scroll or a swipe goes for one frame, px */
+const SCROLL_STEP = 40;
+const SWIPE_STEP = 28;
 
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const coarse = () => matchMedia('(pointer: coarse)').matches;
@@ -84,7 +88,8 @@ dialog::backdrop { background: var(--fr-paper); }
 dialog .fr {
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
-.fr::after {
+/* the texture once open: in place, the page's own covers it */
+dialog .fr::after {
   content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none;
   background-image: var(--fr-texture); background-size: var(--fr-texture-size); opacity: var(--fr-texture-opacity);
 }
@@ -117,8 +122,19 @@ dialog .fr {
 .align { color: var(--fr-ink); padding: 4px 0; text-decoration: underline; text-decoration-color: var(--fr-rule); text-underline-offset: 4px; }
 
 /* the band: two rulers, the marker where the eye rests, the words between them */
-.middle { position: relative; display: grid; align-content: center; gap: 14px; padding: 0 var(--fr-pad); min-height: 0; }
-.band { position: relative; outline: none; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+/* the band sits at the same height whatever shows under it: a row of its own between two shares of the room left,
+   the one under it larger, and what shows under it never takes more than its row */
+.middle {
+  position: relative; display: grid; grid-template-rows: minmax(0, 1fr) auto minmax(0, 1.4fr);
+  padding: 0 var(--fr-pad); min-height: 0;
+}
+.band { grid-row: 2; position: relative; outline: none; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.below { grid-row: 3; min-height: 0; overflow: hidden; display: grid; align-content: start; gap: 10px; padding-top: 14px; }
+/* open, or once used on the page, a drag on the band goes back or on instead of scrolling the page */
+dialog .band, .engaged .band { touch-action: none; }
+/* open on a phone: nothing in the panel scrolls, so Safari never brings its bars back */
+dialog, dialog .fr { overscroll-behavior: none; touch-action: none; }
+dialog button, dialog .seek { touch-action: manipulation; }
 .band:focus-visible .stage { outline: 1px dotted var(--fr-ink); outline-offset: -1px; }
 .playing .band:focus-visible .stage { outline: none; }
 .ruler {
@@ -149,7 +165,8 @@ dialog .fr {
 @keyframes ghost { from { opacity: 0.4; } to { opacity: 0; } }
 
 .context {
-  margin: 0; max-width: 46rem; min-height: calc(3 * 1.45em);
+  margin: 0; max-width: 46rem;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden;
   font-family: var(--fr-font-text); font-size: 14px; line-height: 1.45; color: var(--fr-muted);
   justify-self: start; margin-left: calc(var(--marker-x, 0px));
 }
@@ -198,7 +215,8 @@ dialog .fr {
   .top { gap: 6px; }
   .bottom { gap: 6px; }
   .figure { font-size: 20px; }
-  .context { min-height: 0; -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+  .context { -webkit-line-clamp: 2; }
+  .below { padding-top: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .fade { transition: none; }
@@ -234,13 +252,15 @@ const HTML = `
   </div>
   <div class="middle">
     <div class="band" data-band tabindex="0" role="group" aria-roledescription="reader"
-      aria-label="Reading band. Space to play or pause, left and right arrows to move by sentence, up and down arrows for speed.">
+      aria-label="Reading band. Space to play or pause, left and right arrows to move by sentence, up and down arrows for speed, scroll to move by frame.">
       <div class="ruler up" aria-hidden="true"><span class="mark"></span></div>
       <div class="stage" aria-hidden="true"><span class="ghost" data-ghost></span><span class="chunk" data-chunk></span></div>
       <div class="ruler down" aria-hidden="true"><span class="mark"></span></div>
     </div>
-    <p class="context" data-context></p>
-    <p class="label turn" data-turn>Turn your phone sideways for a longer line</p>
+    <div class="below">
+      <p class="context" data-context></p>
+      <p class="label turn" data-turn>Turn your phone sideways for a longer line</p>
+    </div>
   </div>
   <div class="bottom">
     <div class="stats">
@@ -252,7 +272,7 @@ const HTML = `
     <div class="progress"><input class="seek" type="range" min="0" step="1" data-seek aria-label="Position in the text" /><span class="fill"></span></div>
     <div class="foot fade">
       <button type="button" class="label play" data-act="play" aria-pressed="false"><span data-state>Play</span></button>
-      <span class="label keys"><span class="desk-keys"><b>Space</b> play · <b>← →</b> sentence · <b>↑ ↓</b> speed · <b>Esc</b> close</span><span class="touch-keys">Tap the middle to pause, the sides for a sentence back or on</span></span>
+      <span class="label keys"><span class="desk-keys"><b>Space</b> play · <b>← →</b> sentence · <b>Scroll</b> word · <b>↑ ↓</b> speed · <b>Esc</b> close</span><span class="touch-keys">Tap the middle to pause, the sides for a sentence back or on, swipe for a word</span></span>
     </div>
   </div>
   <p class="vh" aria-live="polite" data-live></p>
@@ -290,6 +310,7 @@ export class FocusReader extends HTMLElement {
   #chunk: HTMLElement;
   #ghost: HTMLElement;
   #context: HTMLElement;
+  #middle: HTMLElement;
   #seek: HTMLInputElement;
   #live: HTMLElement;
 
@@ -298,7 +319,7 @@ export class FocusReader extends HTMLElement {
   #ms: number[] = [];
   #after: number[] = [];
   #i = 0;
-  #s: Settings = { wpm: 300, words: 2, size: 'm', align: 'left' };
+  #s: Settings = { wpm: 200, words: 1, size: 'm', align: 'left' };
   /** the size shown: the one chosen, or smaller if the words per frame need it */
   #effSize: Size = 'm';
   /** text size in px for the size shown */
@@ -312,6 +333,12 @@ export class FocusReader extends HTMLElement {
   #timer = 0;
   #quietTimer = 0;
   #lastFocus: Element | null = null;
+  /** used last on the page: keys and scrolls go to it */
+  #engaged = false;
+  /** scroll not yet turned into frames, px */
+  #wheel = 0;
+  /** a touch drag on the band */
+  #drag: { x: number; y: number; done: number; moved: boolean } | null = null;
   #fullscreen = false;
   #ro?: ResizeObserver;
   #mqPortrait = matchMedia('(orientation: portrait)');
@@ -328,6 +355,7 @@ export class FocusReader extends HTMLElement {
     this.#chunk = this.#q('[data-chunk]');
     this.#ghost = this.#q('[data-ghost]');
     this.#context = this.#q('[data-context]');
+    this.#middle = this.#q('.middle');
     this.#seek = this.#q<HTMLInputElement>('[data-seek]');
     this.#live = this.#q('[data-live]');
   }
@@ -351,6 +379,8 @@ export class FocusReader extends HTMLElement {
       this.#layout();
     });
     this.#mqPortrait.addEventListener('change', this.#onOrientation);
+    document.addEventListener('keydown', this.#onKey);
+    document.addEventListener('pointerdown', this.#onPointerDown, true);
     this.#layout();
   }
 
@@ -359,6 +389,8 @@ export class FocusReader extends HTMLElement {
     clearTimeout(this.#quietTimer);
     this.#ro?.disconnect();
     this.#mqPortrait.removeEventListener('change', this.#onOrientation);
+    document.removeEventListener('keydown', this.#onKey);
+    document.removeEventListener('pointerdown', this.#onPointerDown, true);
     if (this.#dialog.open) this.close();
   }
 
@@ -406,6 +438,7 @@ export class FocusReader extends HTMLElement {
         })
         .catch(() => {});
     }
+    this.#engage(true);
     this.#labels();
     this.#layout();
     this.#band.focus();
@@ -551,6 +584,16 @@ export class FocusReader extends HTMLElement {
     if (this.#playing) this.#schedule();
   }
 
+  /** `n` frames back or on (a scroll, a swipe), and keeps playing from there if it was. */
+  #step(n: number) {
+    if (!this.#frames.length) return;
+    this.#done = false;
+    this.#started = true;
+    this.#i = Math.max(0, Math.min(this.#frames.length - 1, this.#i + n));
+    this.#show(false);
+    if (this.#playing) this.#schedule();
+  }
+
   /** Back to the start of this sentence, or of the one before if this frame is its first. */
   #back() {
     const { words } = this.#doc;
@@ -593,7 +636,10 @@ export class FocusReader extends HTMLElement {
     const w = this.#fr.clientWidth;
     const h = this.#fr.clientHeight;
     // an upright phone is narrow but tall: it reads as a 560 px panel, and the fit (#fit) steps down if needed
-    return Math.min(SIZE_MAX, Math.round(SIZE_FACTOR[size] * Math.min(Math.max(w, 560), h * 1.6)));
+    const px = Math.round(SIZE_FACTOR[size] * Math.min(Math.max(w, 560), h * 1.6));
+    // and the band (1.7 × the size, plus its rulers) never grows over the settings above it
+    const room = Math.floor((this.#middle.clientHeight - 32) / 1.7);
+    return Math.max(12, Math.min(SIZE_MAX, px, room));
   }
 
   /** Width the words can take on the band, from where they start. */
@@ -826,8 +872,31 @@ export class FocusReader extends HTMLElement {
     });
     // the band: the middle plays or pauses, the sides go a sentence back or on. A first tap on a quiet panel only
     // brings the labels back.
+    this.#band.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse') return;
+      this.#drag = { x: e.clientX, y: e.clientY, done: 0, moved: false };
+    });
+    // a drag on a touch screen goes a frame back or on every SWIPE_STEP px: up or left is on, down or right back
+    this.#band.addEventListener('pointermove', (e) => {
+      const d = this.#drag;
+      if (!d || e.pointerType === 'mouse') return;
+      const dx = e.clientX - d.x;
+      const dy = e.clientY - d.y;
+      if (!d.moved && Math.hypot(dx, dy) < 10) return;
+      d.moved = true;
+      const v = Math.abs(dx) > Math.abs(dy) ? -dx : -dy;
+      const steps = Math.trunc(v / SWIPE_STEP);
+      if (steps !== d.done) {
+        this.#step(steps - d.done);
+        d.done = steps;
+      }
+    });
+    this.#band.addEventListener('pointercancel', () => (this.#drag = null));
     this.#band.addEventListener('pointerup', (e) => {
       if (e.button !== 0) return;
+      const dragged = this.#drag?.moved;
+      this.#drag = null;
+      if (dragged) return;
       const wasQuiet = this.#fr.classList.contains('quiet');
       this.#wake();
       if (wasQuiet && e.pointerType !== 'mouse') return;
@@ -841,8 +910,35 @@ export class FocusReader extends HTMLElement {
       if (e.pointerType === 'mouse') this.#wake();
     });
     this.#fr.addEventListener('pointerdown', () => this.#wake());
-    this.#fr.addEventListener('focusin', () => this.#wake());
-    this.#fr.addEventListener('keydown', (e) => this.#key(e));
+    this.#fr.addEventListener('focusin', () => {
+      this.#engage(true);
+      this.#wake();
+    });
+    // a scroll on the band goes a frame back or on, as a drag does: down or right is on
+    this.#band.addEventListener(
+      'wheel',
+      (e) => {
+        if (!this.#dialog.open && !this.#engaged) return;
+        e.preventDefault();
+        const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+        this.#wheel += (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * unit;
+        const steps = Math.trunc(this.#wheel / SCROLL_STEP);
+        if (steps) {
+          this.#wheel -= steps * SCROLL_STEP;
+          this.#step(steps);
+        }
+        this.#wake();
+      },
+      { passive: false },
+    );
+    // open on a phone, Safari brings its bars back on any scroll, even of a page that cannot move: none here
+    this.#dialog.addEventListener(
+      'touchmove',
+      (e) => {
+        if (e.target !== this.#seek) e.preventDefault();
+      },
+      { passive: false },
+    );
     this.#seek.addEventListener('input', () => this.#go(Number(this.#seek.value)));
     this.#dialog.addEventListener('cancel', (e) => {
       e.preventDefault();
@@ -850,9 +946,31 @@ export class FocusReader extends HTMLElement {
     });
   }
 
-  #key(e: KeyboardEvent) {
+  /**
+   * Keys reach it from the whole document: while it is open, or once it has been used on the page and until
+   * something else is. Listening on the panel alone missed them in Safari, where a click leaves the focus on the
+   * page (buttons take none) and a modal dialog can keep it on itself.
+   */
+  #onKey = (e: KeyboardEvent) => {
+    if (e.defaultPrevented) return;
+    const path = e.composedPath();
+    const inside = path.includes(this.#fr);
+    if (!inside && !this.#dialog.open && !this.#engaged) return;
+    const t = path[0] as HTMLElement;
+    if (!inside && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName ?? ''))) return;
+    this.#key(e, t);
+  };
+
+  #onPointerDown = (e: PointerEvent) => this.#engage(e.composedPath().includes(this.#fr));
+
+  #engage(on: boolean) {
+    this.#engaged = on;
+    this.#fr.classList.toggle('engaged', on);
+  }
+
+  #key(e: KeyboardEvent, target: EventTarget) {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    const onSeek = e.target === this.#seek;
+    const onSeek = target === this.#seek;
     this.#wake();
     switch (e.key) {
       case ' ':
