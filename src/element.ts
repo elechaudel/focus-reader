@@ -129,6 +129,8 @@ dialog .fr::after {
 .bar { display: flex; align-items: center; gap: 16px; min-width: 0; }
 .name { display: flex; align-items: center; gap: 8px; color: var(--fr-ink); flex: none; }
 .name::before { content: ''; width: 8px; height: 8px; background: var(--fr-accent); }
+/* name="": no label at all, cell included (the Feed's loop has its own badge there) */
+.name:empty { display: none; }
 .title { flex: 1; min-width: 0; text-align: right; color: var(--fr-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .door { flex: none; padding: 6px 10px; border: 1px solid var(--fr-ink); color: var(--fr-ink); }
 .door:hover, .step:hover, .play:hover, .align:hover { color: var(--fr-accent-text); }

@@ -11,7 +11,7 @@
 ```
 
 - `for`: id of the element whose text it reads (an article's body, a `<template>`). Without it, a `<template>` inside the element, or else its own content. Paragraphs, headings, list items and quotes are read; code blocks, figures, media, tables and anything with `data-focus-skip` are not.
-- `heading`: the title at the top. `name`: the label before it (default "Focus reader").
+- `heading`: the title at the top. `name`: the label before it (default "Focus reader"; empty, no label).
 - `wpm` (100–800), `words` per frame (1–6) and `size` (`s`, `m`, `l`, `xl`): the pace of the view it starts in. Each view keeps its own: Sequence 150 wpm, one word, M; Flow 300 wpm, six words, M. `persist` keeps both.
 - `underline="off"`: in Flow, the words being read only in ink, without the accent's underline (a setting of the panel too).
 - `align` (`left` on a marker, `center` like subtitles, `pivot` on the recognition point as Spritz does).
