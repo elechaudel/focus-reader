@@ -902,14 +902,18 @@ export class FocusReader extends HTMLElement {
       range.setStartBefore(this.#wordEls[a]);
       range.setEndAfter(this.#wordEls[b - 1]);
       const box = this.#text.getBoundingClientRect();
+      // the rects are on screen, the bars in the text's own px: a scaled panel (a loop in a feed) differs
+      const k = box.width / (this.#text.offsetWidth || box.width) || 1;
       for (const rc of Array.from(range.getClientRects())) {
         if (!rc.width) continue;
-        const bottom = Math.round(rc.bottom - box.top);
+        const left = (rc.left - box.left) / k;
+        const right = (rc.right - box.left) / k;
+        const bottom = Math.round((rc.bottom - box.top) / k);
         const line = lines.find((l) => Math.abs(l.bottom - bottom) < 4);
         if (line) {
-          line.left = Math.min(line.left, rc.left - box.left);
-          line.right = Math.max(line.right, rc.right - box.left);
-        } else lines.push({ left: rc.left - box.left, right: rc.right - box.left, bottom });
+          line.left = Math.min(line.left, left);
+          line.right = Math.max(line.right, right);
+        } else lines.push({ left, right, bottom });
       }
     }
     for (const bar of this.#text.querySelectorAll('.under')) bar.remove();
