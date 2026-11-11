@@ -38,8 +38,8 @@ Everything comes from custom properties on the element, with system defaults (`C
 - A longer word stays a little longer; a clause end waits one word, a sentence two, a paragraph or a heading three. The whole is scaled so the text takes exactly words / wpm minutes: the rate shown is the rate you get.
 - Words per frame and size depend on each other: more words step the size down until most frames (90 %) fit the line; a larger size takes words off. A frame longer than most shrinks on its own.
 - Paused, the sentence shows under the band with the frame marked, to read back.
-- Keys: Space plays or pauses, ← → go a sentence back or on, ↑ ↓ change the speed, Escape closes; they reach it from the whole page while it is open, or once it has been used. A tap or a click on the band or the text plays or pauses, and nothing else. A scroll, or a swipe on touch, goes a frame back or on; in Flow while paused, it scrolls the text freely instead, and Play brings the line being read back.
-- While it plays, labels and controls fade out 1 s after Play, then 2 s after a move, a tap or a key, which bring them back. A screen reader hears play, pause and the settings, never each frame.
+- Keys: Space plays or pauses, ← → go a sentence back or on, ↑ ↓ change the speed, Escape closes; they reach it from the whole page while it is open, or once it has been used. A tap or a click on the band or the text plays or pauses, and nothing else. A scroll, or a swipe on touch, goes a frame back or on; in Flow while paused, it scrolls the text freely instead, the reading place following the line at the anchor, and Play goes on from there.
+- While it plays, labels and controls fade out at once on Play, then 2 s after a move, a tap or a key, which bring them back. A screen reader hears play, pause and the settings, never each frame.
 - On a phone, opening asks for full screen and a landscape lock: Android Chrome grants both, Safari on iPhone neither, and there the panel covers the window and works upright.
 
 ## Functions

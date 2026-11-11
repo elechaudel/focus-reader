@@ -43,8 +43,8 @@ const WPM_STEP = 25;
 const WORDS_MAX = 6;
 /** how long the labels stay after the last move while it plays, ms */
 const QUIET_AFTER = 2000;
-/** …and right after Play, sooner */
-const QUIET_AFTER_PLAY = 1000;
+/** …and right after Play, at once: the fade (0.35 s) is the only delay */
+const QUIET_AFTER_PLAY = 0;
 /** settings kept in this browser; the version changes when the defaults do, so a new default is seen */
 const STORE = 'focus-reader.v3';
 /** how far a scroll or a swipe goes for one frame, px */
@@ -398,7 +398,7 @@ export class FocusReader extends HTMLElement {
   /** scroll not yet turned into frames, px */
   #wheel = 0;
   /** a touch drag on the band */
-  #drag: { x: number; y: number; done: number; moved: boolean; free: number; t: number; v: number; ly: number } | null = null;
+  #drag: { x: number; y: number; done: number; moved: boolean; t: number; v: number; ly: number } | null = null;
   #fullscreen = false;
   #ro?: ResizeObserver;
 
@@ -849,16 +849,7 @@ export class FocusReader extends HTMLElement {
     const els = this.#wordEls;
     const f = this.#frames[this.#i];
     if (!f) return;
-    const read = this.#done ? els.length : this.#started ? f.start : 0;
-    const now: [number, number] = this.#done ? [0, 0] : [f.start, f.end];
-    // only the words whose state changed
-    const [a, b] = this.#flowNow;
-    for (let k = a; k < b; k++) els[k]?.classList.remove('now');
-    if (read > this.#flowRead) for (let k = this.#flowRead; k < read; k++) els[k].classList.add('read');
-    else for (let k = read; k < this.#flowRead; k++) els[k].classList.remove('read');
-    for (let k = now[0]; k < now[1]; k++) els[k].classList.add('now');
-    this.#flowRead = read;
-    this.#flowNow = now;
+    this.#markFlow();
 
     const first = els[f.start];
     const win = this.#text.parentElement!;
@@ -875,6 +866,23 @@ export class FocusReader extends HTMLElement {
     this.#flowAt(far);
   }
 
+  /** Flow's words: read, being read (the frame), or ahead; only the ones whose state changed are touched. */
+  #markFlow() {
+    const els = this.#wordEls;
+    const f = this.#frames[this.#i];
+    if (!f || !els.length) return;
+    const read = this.#done ? els.length : this.#started ? f.start : 0;
+    const now: [number, number] = this.#done ? [0, 0] : [f.start, f.end];
+    // only the words whose state changed
+    const [a, b] = this.#flowNow;
+    for (let k = a; k < b; k++) els[k]?.classList.remove('now');
+    if (read > this.#flowRead) for (let k = this.#flowRead; k < read; k++) els[k].classList.add('read');
+    else for (let k = read; k < this.#flowRead; k++) els[k].classList.remove('read');
+    for (let k = now[0]; k < now[1]; k++) els[k].classList.add('now');
+    this.#flowRead = read;
+    this.#flowNow = now;
+  }
+
   /** Puts Flow's text where the line being read and the free scroll say. */
   #flowAt(instant: boolean) {
     const y = Math.round(this.#flowBase + this.#free);
@@ -885,17 +893,45 @@ export class FocusReader extends HTMLElement {
   }
 
   /**
-   * Paused, Flow scrolls freely, at the pace of the hand: from the first line resting on the anchor to the last.
-   * Returns false when it does not apply (Sequence, or playing), for the scroll to go a frame back or on instead.
+   * Paused, Flow scrolls freely, at the pace of the hand, from the first line resting on the anchor to the last,
+   * and the reading place follows: the frame on the line at the anchor becomes the one being read, so Play goes
+   * on from there. Returns false when it does not apply (Sequence, or playing), for the scroll to go a frame back
+   * or on instead.
    */
-  #scrollTo(free: number) {
-    if (this.#s.view !== 'flow' || this.#playing) return false;
+  #scrollBy(dy: number) {
+    if (this.#s.view !== 'flow' || this.#playing || !this.#wordEls.length) return false;
     const anchor = Math.round(this.#text.parentElement!.clientHeight * FLOW_ANCHOR);
-    const max = anchor - this.#flowBase;
-    const min = anchor - this.#text.offsetHeight - this.#flowBase;
-    this.#free = Math.max(min, Math.min(max, free));
+    const y = Math.max(anchor - this.#text.offsetHeight, Math.min(anchor, this.#flowY + dy));
+    const i = frameAt(this.#frames, this.#wordAt(anchor - y));
+    if (i !== this.#i) {
+      this.#i = i;
+      this.#started = true;
+      this.#done = false;
+      this.#markFlow();
+      this.#stats();
+    }
+    // the text stays where the hand put it: the offset is now from the new frame's line
+    const first = this.#wordEls[this.#frames[i].start];
+    this.#flowFrame = i;
+    this.#flowTop = first.offsetTop;
+    this.#flowBase = Math.round(anchor - first.offsetTop - first.offsetHeight / 2);
+    this.#free = y - this.#flowBase;
     this.#flowAt(true);
     return true;
+  }
+
+  /** The first word of the line that holds `y`, in the text's own coordinates. */
+  #wordAt(y: number) {
+    const els = this.#wordEls;
+    let lo = 0;
+    let hi = els.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (els[mid].offsetTop + els[mid].offsetHeight > y) hi = mid;
+      else lo = mid + 1;
+    }
+    while (lo > 0 && els[lo - 1].offsetTop === els[lo].offsetTop) lo--;
+    return lo;
   }
 
   /** While paused: the whole sentence under the band, the frame in it marked, to read back if needed. */
@@ -1084,7 +1120,7 @@ export class FocusReader extends HTMLElement {
     el.addEventListener('pointerdown', (e) => {
       cancelAnimationFrame(this.#glide);
       if (e.pointerType === 'mouse') return;
-      this.#drag = { x: e.clientX, y: e.clientY, done: 0, moved: false, free: this.#free, t: e.timeStamp, v: 0, ly: e.clientY };
+      this.#drag = { x: e.clientX, y: e.clientY, done: 0, moved: false, t: e.timeStamp, v: 0, ly: e.clientY };
     });
     // a drag on a touch screen goes a frame back or on every SWIPE_STEP px: up or left is on, down or right back
     el.addEventListener('pointermove', (e) => {
@@ -1095,10 +1131,11 @@ export class FocusReader extends HTMLElement {
       if (!d.moved && Math.hypot(dx, dy) < 12) return;
       d.moved = true;
       const dt = e.timeStamp - d.t;
-      if (dt > 0) d.v = 0.8 * ((e.clientY - d.ly) / dt) + 0.2 * d.v;
+      const step = e.clientY - d.ly;
+      if (dt > 0) d.v = 0.8 * (step / dt) + 0.2 * d.v;
       d.t = e.timeStamp;
       d.ly = e.clientY;
-      if (this.#scrollTo(d.free + dy)) return;
+      if (this.#scrollBy(step)) return;
       const v = Math.abs(dx) > Math.abs(dy) ? -dx : -dy;
       const steps = Math.trunc(v / SWIPE_STEP);
       if (steps !== d.done) {
@@ -1126,7 +1163,7 @@ export class FocusReader extends HTMLElement {
         e.preventDefault();
         const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
         this.#wake();
-        if (this.#scrollTo(this.#free - e.deltaY * unit)) return;
+        if (this.#scrollBy(-e.deltaY * unit)) return;
         this.#wheel += (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * unit;
         const steps = Math.trunc(this.#wheel / SCROLL_STEP);
         if (steps) {
@@ -1145,8 +1182,8 @@ export class FocusReader extends HTMLElement {
       const dt = Math.min(32, now - last);
       last = now;
       v *= Math.pow(0.95, dt / 16);
-      const before = this.#free;
-      if (Math.abs(v) < 0.02 || !this.#scrollTo(this.#free + v * dt) || this.#free === before) return;
+      const before = this.#flowY;
+      if (Math.abs(v) < 0.02 || !this.#scrollBy(v * dt) || this.#flowY === before) return;
       this.#glide = requestAnimationFrame(tick);
     };
     this.#glide = requestAnimationFrame(tick);
