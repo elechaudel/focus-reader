@@ -205,7 +205,7 @@ dialog button, dialog .seek { touch-action: manipulation; }
   margin: 0; max-width: 46rem;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden;
   font-family: var(--fr-font-text); font-size: 14px; line-height: 1.45; color: var(--fr-muted);
-  justify-self: start; margin-left: calc(var(--marker-x, 0px));
+  justify-self: start;
 }
 .context mark { background: none; color: var(--fr-ink); text-decoration: underline; text-decoration-color: var(--fr-accent); text-underline-offset: 3px; text-decoration-thickness: 2px; }
 .playing .context { visibility: hidden; }
@@ -219,7 +219,7 @@ dialog button, dialog .seek { touch-action: manipulation; }
 .progress-head { display: flex; justify-content: space-between; }
 .progress { position: relative; height: 12px; border: 1px solid var(--fr-ink); }
 .fill {
-  position: absolute; left: 2px; top: 2px; bottom: 2px; width: calc((100% - 4px) * var(--p, 0));
+  position: absolute; left: 2px; top: 2px; bottom: 2px; width: 0;
   background: repeating-linear-gradient(90deg, var(--fr-accent) 0 6px, transparent 6px 8px);
 }
 .seek { position: absolute; inset: -8px 0; width: 100%; height: calc(100% + 16px); margin: 0; opacity: 0; cursor: pointer; }
@@ -274,12 +274,12 @@ dialog button, dialog .seek { touch-action: manipulation; }
   .band:focus-visible .stage, .flow:focus-visible .window { outline: none; }
 }
 .window { position: relative; overflow: hidden; }
-.window .mark { left: var(--marker); top: calc(var(--anchor) - 4px); width: 9px; height: 9px; margin-left: -28px; background: var(--fr-accent); }
+.window .mark { left: var(--marker); width: 9px; height: 9px; margin-left: -28px; background: var(--fr-accent); }
 .window .mark::after { display: none; }
 .text {
   position: absolute; left: var(--marker); right: 8px; top: 0; max-width: 24em;
   font-family: var(--fr-font-text); font-weight: 600; font-size: var(--flow-size); line-height: 1.22;
-  transform: translateY(var(--y, 0px)); transition: transform var(--move, 0.35s) cubic-bezier(0.65, 0, 0.35, 1);
+  transition: transform var(--move, 0.35s) cubic-bezier(0.65, 0, 0.35, 1);
 }
 .text.instant { transition: none; }
 .text p { margin: 0 0 0.75em; }
@@ -846,7 +846,8 @@ export class FocusReader extends HTMLElement {
       x = Math.max(8, Math.min(x, stageW - real - 8));
     }
     chunk.style.setProperty('--x', `${Math.round(x)}px`);
-    this.#fr.style.setProperty('--marker-x', align === 'left' ? `${Math.round(marker)}px` : '0px');
+    // on the sentence itself: a custom property on the panel would restyle everything in it, every frame
+    this.#context.style.marginLeft = align === 'left' ? `${Math.round(marker)}px` : '0px';
     this.#stats();
     if (!this.#playing) this.#showContext();
   }
@@ -935,7 +936,7 @@ export class FocusReader extends HTMLElement {
 
     const first = els[f.start];
     const anchor = this.#anchor();
-    this.#fr.style.setProperty('--anchor', `${anchor}px`);
+    this.#q('.window .mark').style.top = `${anchor - 4}px`;
     const top = first.offsetTop;
     // reading on (the frame next to the one before, either way) always moves smoothly, however far: a paragraph
     // is often more than three lines; a jump (a new text, a resize, a seek far away) moves at once
@@ -1035,7 +1036,9 @@ export class FocusReader extends HTMLElement {
     if (y === this.#flowY && !instant) return;
     this.#text.classList.toggle('instant', instant);
     this.#flowY = y;
-    this.#text.style.setProperty('--y', `${y}px`);
+    // a transform on the text itself, not a custom property, which every one of its words would inherit and be
+    // restyled for, on every scroll event
+    this.#text.style.transform = `translateY(${y}px)`;
   }
 
   /**
@@ -1129,7 +1132,7 @@ export class FocusReader extends HTMLElement {
     q('[data-left-unit]').textContent = unit;
     const p = total ? read / total : 0;
     q('[data-pct]').textContent = `${Math.round(p * 100)}%`;
-    this.#fr.style.setProperty('--p', String(p));
+    this.#q('.fill').style.width = `calc((100% - 4px) * ${p})`;
     this.#seek.value = String(f ? f.start : 0);
     this.#seek.setAttribute('aria-valuetext', `Word ${fmt.format(read)} of ${fmt.format(total)}, ${left} ${unit} left`);
     q('[data-state]').textContent = this.#playing ? 'Reading' : this.#done ? 'Read again' : 'Play';

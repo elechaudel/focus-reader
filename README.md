@@ -44,6 +44,12 @@ Everything comes from custom properties on the element, with system defaults (`C
 - While it plays, labels and controls fade out at once on Play, then 2 s after a move, a tap or a key, which bring them back. A screen reader hears play, pause and the settings, never each frame.
 - On a phone, opening asks for full screen and a landscape lock: Android Chrome grants both, Safari on iPhone neither, and there the panel covers the window and works upright.
 
+## Performance
+
+- The panel moves the text and the progress by writing a transform or a width on the element itself, never an inherited custom property: a scroll or a frame restyles one element, not every word of the text.
+- Idle, inline or open, it does nothing: no timer, no animation frame. Playing, it works only when a frame changes.
+- To load it on demand (as the Feed's loop does, once it comes near the screen), import `@elchdl/focus-reader/register`: it registers the element and exports nothing, so the bundle needs no module namespace for it.
+
 ## Functions
 
 `@elchdl/focus-reader/text`: `blocksFromElement`, `blocksFromText`, `parse`, `frames`, `schedule`, `frameAt`, `orp`.
