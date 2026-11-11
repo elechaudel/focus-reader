@@ -307,7 +307,7 @@ const HTML = `
   </div>
   <div class="middle">
     <div class="band" data-band tabindex="0" role="group" aria-roledescription="reader"
-      aria-label="Reading band. Space to play or pause, left and right arrows to move by sentence, up and down arrows for speed, scroll to move by frame.">
+      aria-label="Reading band. Space to play or pause, left and right arrows to move by frame, up and down arrows for speed, scroll to move by frame.">
       <div class="ruler up" aria-hidden="true"><span class="mark"></span></div>
       <div class="stage" aria-hidden="true"><span class="ghost" data-ghost></span><span class="chunk" data-chunk></span></div>
       <div class="ruler down" aria-hidden="true"><span class="mark"></span></div>
@@ -332,7 +332,7 @@ const HTML = `
     <div class="progress"><input class="seek" type="range" min="0" step="1" data-seek aria-label="Position in the text" /><span class="fill"></span></div>
     <div class="foot fade">
       <button type="button" class="label play" data-act="play" aria-pressed="false"><span data-state>Play</span></button>
-      <span class="label keys"><span class="desk-keys"><b>Space</b> play · <b>← →</b> <span class="seq-only">sentence</span><span class="flow-only">frame</span> · <b>Scroll</b> <span class="seq-only">word</span><span class="flow-only">text</span> · <b>↑ ↓</b> speed · <b>Esc</b> close</span><span class="touch-keys">Tap to play or pause, swipe for a word</span></span>
+      <span class="label keys"><span class="desk-keys"><b>Space</b> play · <b>← →</b> frame · <b>Scroll</b> <span class="seq-only">frame</span><span class="flow-only">text</span> · <b>↑ ↓</b> speed · <b>Esc</b> close</span><span class="touch-keys">Tap to play or pause, swipe for a word</span></span>
     </div>
   </div>
   <p class="vh" aria-live="polite" data-live></p>
@@ -685,29 +685,6 @@ export class FocusReader extends HTMLElement {
     this.#i = Math.max(0, Math.min(this.#frames.length - 1, this.#i + n));
     this.#show(false);
     if (this.#playing) this.#schedule();
-  }
-
-  /** Back to the start of this sentence, or of the one before if this frame is its first. */
-  #back() {
-    const { words } = this.#doc;
-    const f = this.#frames[this.#i];
-    if (!f) return;
-    let target = words[f.start].sentence;
-    if (target === f.start && f.start > 0) target = words[f.start - 1].sentence;
-    this.#go(target);
-    this.#say('Back a sentence');
-  }
-
-  #forward() {
-    const { words } = this.#doc;
-    const f = this.#frames[this.#i];
-    if (!f) return;
-    const here = words[f.start].sentence;
-    let w = f.end;
-    while (w < words.length && words[w].sentence === here) w++;
-    if (w >= words.length) return;
-    this.#go(w);
-    this.#say('On a sentence');
   }
 
   // ——— drawing
@@ -1315,17 +1292,15 @@ export class FocusReader extends HTMLElement {
         e.preventDefault();
         this.toggle();
         break;
-      // on the progress slider too, so ← → always go a sentence, never a word as a slider's own keys would
-      // a sentence in Sequence; in Flow a frame, so every part of the text is the one being read in turn
+      // on the progress slider too, so ← → always go a frame, as everywhere else, not the slider's own steps
+      // a frame back or on, in both views, so every part of the text is the one being read in turn
       case 'ArrowLeft':
         e.preventDefault();
-        if (this.#s.view === 'flow') this.#step(-1);
-        else this.#back();
+        this.#step(-1);
         break;
       case 'ArrowRight':
         e.preventDefault();
-        if (this.#s.view === 'flow') this.#step(1);
-        else this.#forward();
+        this.#step(1);
         break;
       case 'ArrowUp':
         e.preventDefault();
