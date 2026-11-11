@@ -2,7 +2,7 @@
 // few words, and timed. Pure functions, no DOM except blocksFromElement, which only reads one.
 //
 // Timing follows what reading research and the RSVP readers before this one do (pasky/speedread, Spritz):
-// a longer word stays a little longer, a frame that ends a clause waits a beat, the end of a sentence two, the
+// a longer word stays a little longer, a comma or a colon in a frame adds a beat, the end of a sentence two, the
 // end of a paragraph three, and a heading stands on its own. Everything is then scaled so the whole text takes
 // exactly words / wpm minutes: the rate shown is the rate you get, pauses included.
 
@@ -139,9 +139,10 @@ const letters = (w: string) => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ''
 export const PAUSES = { clause: 1, sentence: 2, block: 3, heading: 3 };
 
 /**
- * Frames of at most `perFrame` words. A frame never crosses the end of a sentence or of a block, and ends at a
- * comma, a semicolon, a colon or a dash, so a frame reads as a piece of a sentence rather than a slice of it.
- * A heading is shown on its own, cut only if it is longer than a frame.
+ * Frames of `perFrame` words. A frame never crosses the end of a sentence or of a block, and nothing else cuts
+ * it: a comma, a semicolon, a colon or a dash inside it only makes it stay a beat longer (cutting there too left
+ * frames of a word or two, far short of the count). A heading is shown on its own, cut only if it is longer than
+ * a frame.
  */
 export function frames(doc: Doc, perFrame: number): Frame[] {
   const n = Math.max(1, Math.floor(perFrame));
@@ -162,10 +163,7 @@ export function frames(doc: Doc, perFrame: number): Frame[] {
         pause = PAUSES.sentence;
         break;
       }
-      if (CLAUSE_END.test(w) || / [—–-]$/.test(w)) {
-        pause = PAUSES.clause;
-        break;
-      }
+      if (CLAUSE_END.test(w) || / [—–-]$/.test(w)) pause += PAUSES.clause;
     }
     const blockEnds = end >= words.length || words[end].block !== block;
     if (blockEnds) pause = heading ? PAUSES.heading : PAUSES.block;

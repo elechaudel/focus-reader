@@ -36,7 +36,7 @@ Everything comes from custom properties on the element, with system defaults (`C
 
 ## How it reads
 
-- Frames never cross the end of a sentence or a paragraph, and end at a comma, a semicolon, a colon or a dash.
+- Frames hold the number of words set, and never cross the end of a sentence or a paragraph; a comma, a semicolon, a colon or a dash inside one makes it stay a beat longer.
 - A longer word stays a little longer; a clause end waits one word, a sentence two, a paragraph or a heading three. The whole is scaled so the text takes exactly words / wpm minutes: the rate shown is the rate you get.
 - Words per frame and size depend on each other: more words step the size down until most frames (90 %) fit the line; a larger size takes words off. A frame longer than most shrinks on its own.
 - Paused, the sentence shows under the band with the frame marked, to read back.
