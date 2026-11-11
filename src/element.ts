@@ -220,6 +220,7 @@ dialog button, dialog .seek { touch-action: manipulation; }
 .keys { color: var(--fr-muted); }
 .keys b { font-weight: inherit; color: var(--fr-ink); }
 .touch-keys { display: none; }
+[data-view='flow'] .seq-only, .fr:not([data-view='flow']) .flow-only { display: none; }
 @media (pointer: coarse) { .desk-keys { display: none; } .touch-keys { display: inline; } }
 
 /* small panels: fewer words around the band */
@@ -315,7 +316,7 @@ const HTML = `
       <p class="context" data-context></p>
     </div>
     <div class="flow" data-flow tabindex="0" role="group" aria-roledescription="reader"
-      aria-label="Reading flow. Space to play or pause, left and right arrows to move by sentence, up and down arrows for speed.">
+      aria-label="Reading flow. Space to play or pause, left and right arrows to move by frame, up and down arrows for speed.">
       <div class="ruler up" aria-hidden="true"></div>
       <div class="window" aria-hidden="true"><span class="mark"></span><div class="text" data-text></div></div>
       <div class="ruler down" aria-hidden="true"></div>
@@ -331,7 +332,7 @@ const HTML = `
     <div class="progress"><input class="seek" type="range" min="0" step="1" data-seek aria-label="Position in the text" /><span class="fill"></span></div>
     <div class="foot fade">
       <button type="button" class="label play" data-act="play" aria-pressed="false"><span data-state>Play</span></button>
-      <span class="label keys"><span class="desk-keys"><b>Space</b> play · <b>← →</b> sentence · <b>Scroll</b> word · <b>↑ ↓</b> speed · <b>Esc</b> close</span><span class="touch-keys">Tap to play or pause, swipe for a word</span></span>
+      <span class="label keys"><span class="desk-keys"><b>Space</b> play · <b>← →</b> <span class="seq-only">sentence</span><span class="flow-only">frame</span> · <b>Scroll</b> <span class="seq-only">word</span><span class="flow-only">text</span> · <b>↑ ↓</b> speed · <b>Esc</b> close</span><span class="touch-keys">Tap to play or pause, swipe for a word</span></span>
     </div>
   </div>
   <p class="vh" aria-live="polite" data-live></p>
@@ -1315,13 +1316,16 @@ export class FocusReader extends HTMLElement {
         this.toggle();
         break;
       // on the progress slider too, so ← → always go a sentence, never a word as a slider's own keys would
+      // a sentence in Sequence; in Flow a frame, so every part of the text is the one being read in turn
       case 'ArrowLeft':
         e.preventDefault();
-        this.#back();
+        if (this.#s.view === 'flow') this.#step(-1);
+        else this.#back();
         break;
       case 'ArrowRight':
         e.preventDefault();
-        this.#forward();
+        if (this.#s.view === 'flow') this.#step(1);
+        else this.#forward();
         break;
       case 'ArrowUp':
         e.preventDefault();
