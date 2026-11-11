@@ -142,9 +142,9 @@ export const PAUSES = { clause: 1, sentence: 2, block: 3, heading: 3 };
  * Frames of `perFrame` words. A frame never crosses the end of a sentence or of a block, and nothing else cuts
  * it: a comma, a semicolon, a colon or a dash inside it only makes it stay a beat longer (cutting there too left
  * frames of a word or two, far short of the count). A heading is shown on its own, cut only if it is longer than
- * a frame.
+ * a frame. `byBlock`: a frame is a whole block (a paragraph), its sentences and clauses only adding beats.
  */
-export function frames(doc: Doc, perFrame: number): Frame[] {
+export function frames(doc: Doc, perFrame: number, byBlock = false): Frame[] {
   const n = Math.max(1, Math.floor(perFrame));
   const out: Frame[] = [];
   const { words, blocks } = doc;
@@ -155,18 +155,20 @@ export function frames(doc: Doc, perFrame: number): Frame[] {
     let end = start;
     let weight = 0;
     let pause = 0;
-    while (end < words.length && words[end].block === block && end - start < n) {
+    while (end < words.length && words[end].block === block && (byBlock || end - start < n)) {
       const w = words[end].text;
       weight += wordWeight(w);
       end++;
       if (SENTENCE_END.test(w)) {
-        pause = PAUSES.sentence;
-        break;
+        pause += PAUSES.sentence;
+        if (!byBlock) break;
+        continue;
       }
       if (CLAUSE_END.test(w) || / [—–-]$/.test(w)) pause += PAUSES.clause;
     }
     const blockEnds = end >= words.length || words[end].block !== block;
-    if (blockEnds) pause = heading ? PAUSES.heading : PAUSES.block;
+    // a whole paragraph keeps the beats of its sentences, and takes the block's on top
+    if (blockEnds) pause = (byBlock ? pause : 0) + (heading ? PAUSES.heading : PAUSES.block);
     out.push({
       start,
       end,

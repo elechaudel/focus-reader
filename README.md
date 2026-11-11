@@ -15,7 +15,7 @@
 - `wpm` (100–800), `words` per frame (1–6) and `size` (`s`, `m`, `l`, `xl`): the pace of the view it starts in. Each view keeps its own: Sequence 150 wpm, one word, M; Flow 300 wpm, six words, M. `persist` keeps both.
 - `underline="off"`: in Flow, the words being read only in ink, without the accent's underline (a setting of the panel too).
 - `align` (`left` on a marker, `center` like subtitles, `pivot` on the recognition point as Spritz does).
-- `view`: `sequence` (default), one frame at a time on a band, or `flow`, the whole text with the frame being read marked, moving up a line at a time like song lyrics. It reflects the view shown, and changing it switches.
+- `view`: `sequence` (default), one frame at a time on a band, or `flow`, the whole text with the frame being read marked, moving up a line at a time like song lyrics. In Flow, Words goes on past six to ¶: a whole paragraph at a time, with a pace line in the margin and a pace of its own (250 wpm). It reflects the view shown, and changing it switches.
 - `modal`: hidden until opened. Without it, the reader sits in the page, filling its box, and opens to the full window from its own button.
 - `persist`: remembers the settings in this browser (`localStorage`).
 - Methods: `open()`, `close()`, `play()`, `pause()`, `toggle()`, `reload()`. Events: `focusreaderopen`, `focusreaderclose`, `focusreaderview` (`detail.view`).

@@ -23,7 +23,15 @@ export type Size = 's' | 'm' | 'l' | 'xl';
 export type View = 'sequence' | 'flow';
 /** what each view keeps of its own: Flow reads more words at a time, and faster */
 type Pace = { wpm: number; words: number; size: Size };
-const PACES: Record<View, Pace> = { sequence: { wpm: 150, words: 1, size: 'm' }, flow: { wpm: 300, words: 6, size: 'm' } };
+/** Flow a paragraph at a time keeps a pace of its own too */
+type PaceKey = View | 'paragraph';
+const PACES: Record<PaceKey, Pace> = {
+  sequence: { wpm: 150, words: 1, size: 'm' },
+  flow: { wpm: 300, words: 6, size: 'm' },
+  // a paragraph read whole, at an ordinary pace: 238 wpm is silent reading of non-fiction in English on average
+  // (Brysbaert, 2019, across 190 studies), 250 on the speed's steps of 25
+  paragraph: { wpm: 250, words: 6, size: 'm' },
+};
 
 const VIEWS: View[] = ['sequence', 'flow'];
 const VIEW_LABEL: Record<View, string> = { sequence: 'Sequence', flow: 'Flow' };
@@ -31,6 +39,8 @@ const VIEW_LABEL: Record<View, string> = { sequence: 'Sequence', flow: 'Flow' };
 const FLOW_SIZE: Record<Size, [number, number]> = { s: [16, 0.012], m: [18, 0.018], l: [20, 0.026], xl: [22, 0.036] };
 /** where the line being read rests in Flow, as a share of the window's height */
 const FLOW_ANCHOR = 0.38;
+/** …and a paragraph's first line, higher, so most of the paragraph shows under it */
+const FLOW_ANCHOR_PARA = 0.14;
 
 const SIZES: Size[] = ['s', 'm', 'l', 'xl'];
 /** text size as a share of the panel (its width, at least 560 px, or 1.6 × its height if that is smaller) */
@@ -249,6 +259,10 @@ dialog button, dialog .seek { touch-action: manipulation; }
 /* Underline is Flow's own setting */
 .fr:not([data-view='flow']) .underline-setting { display: none; }
 .no-underline .text .under { display: none; }
+/* Flow a paragraph at a time: the paragraph in ink, no underline, and the pace line where the marker was */
+.para .text .under, .para .underline-setting, .para .window .mark { display: none; }
+.text .pace { position: absolute; left: -26px; width: 3px; background: var(--fr-rule); pointer-events: none; }
+.text .pace > span { position: absolute; inset: 0; background: var(--fr-accent); transform-origin: 50% 0; transform: scaleY(0); }
 [data-view='flow'] .flow { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
 .flow:focus-visible .window { outline: 1px dotted var(--fr-ink); outline-offset: -1px; }
 .playing .flow:focus-visible .window { outline: none; }
@@ -353,6 +367,8 @@ interface Settings {
   view: View;
   /** Flow: the frame being read underlined, or only in ink */
   underline: boolean;
+  /** Flow: a whole paragraph at a time, past six words */
+  para: boolean;
 }
 
 /**
@@ -403,9 +419,15 @@ export class FocusReader extends HTMLElement {
   #ms: number[] = [];
   #after: number[] = [];
   #i = 0;
-  #s: Settings = { ...PACES.sequence, align: 'left', view: 'sequence', underline: true };
+  #s: Settings = { ...PACES.sequence, align: 'left', view: 'sequence', underline: true, para: false };
   /** each view's own pace, the one shown included (kept in step by #set) */
-  #paces: Record<View, Pace> = { sequence: { ...PACES.sequence }, flow: { ...PACES.flow } };
+  #paces: Record<PaceKey, Pace> = { sequence: { ...PACES.sequence }, flow: { ...PACES.flow }, paragraph: { ...PACES.paragraph } };
+  /** how long the frame on screen has shown, ms, before the last pause: Play goes on from there */
+  #elapsed = 0;
+  /** when the frame on screen started showing, or showing again */
+  #shownAt = 0;
+  /** the pace line's fill, while a paragraph shows */
+  #paceAnim?: Animation;
   /** the size shown: the one chosen, or smaller if the words per frame need it */
   #effSize: Size = 'm';
   /** text size in px for the size shown */
@@ -459,7 +481,7 @@ export class FocusReader extends HTMLElement {
     pace.words = clampWords(Number(a('words')) || pace.words);
     if (SIZES.includes(a('size') as Size)) pace.size = a('size') as Size;
     if (this.hasAttribute('persist')) this.#restore();
-    Object.assign(s, this.#paces[s.view]);
+    Object.assign(s, this.#paces[this.#paceKey()]);
     // the view reads back as an attribute, for the page to show which one is on
     if (this.getAttribute('view') !== s.view) this.setAttribute('view', s.view);
 
@@ -570,6 +592,7 @@ export class FocusReader extends HTMLElement {
     if (this.#done) {
       this.#done = false;
       this.#i = 0;
+      this.#elapsed = 0;
     }
     this.#playing = true;
     this.#started = true;
@@ -582,6 +605,7 @@ export class FocusReader extends HTMLElement {
 
   pause() {
     if (!this.#playing) return;
+    this.#elapsed = Math.min(this.#ms[this.#i] ?? 0, this.#shownFor());
     this.#playing = false;
     this.#stop();
     this.#fr.classList.remove('playing');
@@ -624,7 +648,8 @@ export class FocusReader extends HTMLElement {
 
   /** Frames for the current words per frame, keeping the place: the frame that holds word `word`. */
   #reframe(word: number) {
-    this.#frames = frames(this.#doc, this.#s.words);
+    this.#frames = frames(this.#doc, this.#s.words, this.#byBlock());
+    this.#elapsed = 0;
     this.#i = this.#frames.length ? frameAt(this.#frames, word) : 0;
     this.#retime();
   }
@@ -650,10 +675,13 @@ export class FocusReader extends HTMLElement {
 
   // ——— playing
 
+  /** The next frame, once this one has had its time (what it had before a pause counts). */
   #schedule() {
     this.#stop();
     if (!this.#playing) return;
+    this.#shownAt = performance.now();
     this.#timer = window.setTimeout(() => {
+      this.#elapsed = 0;
       if (this.#i >= this.#frames.length - 1) {
         this.#playing = false;
         this.#done = true;
@@ -666,7 +694,7 @@ export class FocusReader extends HTMLElement {
       this.#i++;
       this.#show(true);
       this.#schedule();
-    }, this.#ms[this.#i]);
+    }, Math.max(0, this.#ms[this.#i] - this.#elapsed));
   }
 
   #stop() {
@@ -679,6 +707,7 @@ export class FocusReader extends HTMLElement {
     this.#done = false;
     this.#started = true;
     this.#i = frameAt(this.#frames, Math.max(0, Math.min(w, this.#doc.words.length - 1)));
+    this.#elapsed = 0;
     this.#show(false);
     if (this.#playing) this.#schedule();
   }
@@ -689,6 +718,7 @@ export class FocusReader extends HTMLElement {
     this.#done = false;
     this.#started = true;
     this.#i = Math.max(0, Math.min(this.#frames.length - 1, this.#i + n));
+    this.#elapsed = 0;
     this.#show(false);
     if (this.#playing) this.#schedule();
   }
@@ -702,6 +732,7 @@ export class FocusReader extends HTMLElement {
     if (!w || !h) return;
     this.#fr.dataset.view = this.#s.view;
     this.#fr.classList.toggle('no-underline', !this.#s.underline);
+    this.#fr.classList.toggle('para', this.#byBlock());
     this.#fit();
     this.#fr.style.setProperty('--marker', `${MARKER[this.#s.view === 'flow' ? 'left' : this.#s.align] * 100}%`);
     if (this.#s.view === 'flow') {
@@ -817,6 +848,25 @@ export class FocusReader extends HTMLElement {
     if (!this.#playing) this.#showContext();
   }
 
+  /** Whose pace is on: the view's, or Flow's a paragraph at a time. */
+  #paceKey(view = this.#s.view, para = this.#s.para): PaceKey {
+    return view === 'flow' && para ? 'paragraph' : view;
+  }
+
+  #byBlock() {
+    return this.#s.view === 'flow' && this.#s.para;
+  }
+
+  /** How far down the window the line being read rests. */
+  #anchor() {
+    return Math.round(this.#text.parentElement!.clientHeight * (this.#byBlock() ? FLOW_ANCHOR_PARA : FLOW_ANCHOR));
+  }
+
+  /** How long the frame on screen has shown so far, ms. */
+  #shownFor() {
+    return this.#elapsed + (this.#playing && this.#timer ? performance.now() - this.#shownAt : 0);
+  }
+
   /** The element that takes the focus for the view shown. */
   #target() {
     return this.#s.view === 'flow' ? this.#flow : this.#band;
@@ -860,8 +910,7 @@ export class FocusReader extends HTMLElement {
     this.#markFlow();
 
     const first = els[f.start];
-    const win = this.#text.parentElement!;
-    const anchor = Math.round(win.clientHeight * FLOW_ANCHOR);
+    const anchor = this.#anchor();
     this.#fr.style.setProperty('--anchor', `${anchor}px`);
     const top = first.offsetTop;
     // a free scroll (paused) holds until the frame changes or it plays again
@@ -872,6 +921,32 @@ export class FocusReader extends HTMLElement {
     this.#flowTop = top;
     this.#flowBase = Math.round(anchor - top - first.offsetHeight / 2);
     this.#flowAt(far);
+    this.#paceLine();
+  }
+
+  /**
+   * A paragraph at a time: a line in the margin along the paragraph, filling down in the accent as its time
+   * goes, so the pace shows without cutting the text. It stops with a pause and goes on from there.
+   */
+  #paceLine() {
+    this.#paceAnim?.cancel();
+    this.#paceAnim = undefined;
+    this.#text.querySelector('.pace')?.remove();
+    const f = this.#frames[this.#i];
+    if (!this.#byBlock() || !f || this.#done) return;
+    const first = this.#wordEls[f.start];
+    const last = this.#wordEls[f.end - 1];
+    const line = document.createElement('span');
+    line.className = 'pace';
+    const fill = document.createElement('span');
+    line.append(fill);
+    Object.assign(line.style, { top: `${first.offsetTop}px`, height: `${last.offsetTop + last.offsetHeight - first.offsetTop}px` });
+    this.#text.append(line);
+    if (!this.#started) return;
+    const ms = this.#ms[this.#i] ?? 0;
+    this.#paceAnim = fill.animate([{ transform: 'scaleY(0)' }, { transform: 'scaleY(1)' }], { duration: Math.max(1, ms), fill: 'forwards', easing: 'linear' });
+    this.#paceAnim.currentTime = Math.min(ms, this.#shownFor());
+    if (!this.#playing) this.#paceAnim.pause();
   }
 
   /** Flow's words: read, being read (the frame), or ahead; only the ones whose state changed are touched. */
@@ -945,13 +1020,14 @@ export class FocusReader extends HTMLElement {
    */
   #scrollBy(dy: number) {
     if (this.#s.view !== 'flow' || this.#playing || !this.#wordEls.length) return false;
-    const anchor = Math.round(this.#text.parentElement!.clientHeight * FLOW_ANCHOR);
+    const anchor = this.#anchor();
     const y = Math.max(anchor - this.#text.offsetHeight, Math.min(anchor, this.#flowY + dy));
     const i = frameAt(this.#frames, this.#wordAt(anchor - y));
     if (i !== this.#i) {
       this.#i = i;
       this.#started = true;
       this.#done = false;
+      this.#elapsed = 0;
       this.#markFlow();
       this.#stats();
     }
@@ -962,6 +1038,7 @@ export class FocusReader extends HTMLElement {
     this.#flowBase = Math.round(anchor - first.offsetTop - first.offsetHeight / 2);
     this.#free = y - this.#flowBase;
     this.#flowAt(true);
+    if (this.#byBlock()) this.#paceLine();
     return true;
   }
 
@@ -1037,14 +1114,17 @@ export class FocusReader extends HTMLElement {
     const s = this.#s;
     const q = (sel: string) => this.#q<HTMLButtonElement>(sel);
     q('[data-wpm]').textContent = String(s.wpm);
-    q('[data-words]').textContent = String(s.words);
+    const para = this.#byBlock();
+    q('[data-words]').textContent = para ? '¶' : String(s.words);
+    q('[data-words]').setAttribute('aria-label', para ? 'A paragraph at a time' : `${s.words} ${s.words === 1 ? 'word' : 'words'} at a time`);
     q('[data-size]').textContent = this.#effSize.toUpperCase();
     q('[data-act="align"]').textContent = ALIGN_LABEL[s.align];
     q('[data-act="align"]').setAttribute('aria-label', `Alignment: ${ALIGN_LABEL[s.align]}. Change`);
     q('[data-act="wpm-"]').disabled = s.wpm <= WPM_MIN;
     q('[data-act="wpm+"]').disabled = s.wpm >= WPM_MAX;
-    q('[data-act="words-"]').disabled = s.words <= 1;
-    q('[data-act="words+"]').disabled = s.words >= WORDS_MAX || (s.view === 'sequence' && !this.#fits(s.words + 1, 's'));
+    q('[data-act="words-"]').disabled = !para && s.words <= 1;
+    // in Flow, past six words comes a whole paragraph
+    q('[data-act="words+"]').disabled = s.view === 'flow' ? para : s.words >= WORDS_MAX || !this.#fits(s.words + 1, 's');
     q('[data-act="view"]').textContent = VIEW_LABEL[s.view];
     q('[data-act="view"]').setAttribute('aria-label', `View: ${VIEW_LABEL[s.view]}. Change`);
     q('[data-act="underline"]').textContent = s.underline ? 'On' : 'Off';
@@ -1059,19 +1139,22 @@ export class FocusReader extends HTMLElement {
   #set(change: Partial<Settings>, say: string) {
     const word = this.#frames[this.#i]?.start ?? 0;
     const s = this.#s;
-    const before = s.words;
-    if (change.view && change.view !== s.view) {
-      // each view comes back with its own pace
-      Object.assign(change, this.#paces[change.view]);
+    const before = this.#byBlock() ? 'paragraph' : String(s.words);
+    const to = this.#paceKey(change.view ?? s.view, change.para ?? s.para);
+    if (to !== this.#paceKey()) {
+      // each view, and Flow a paragraph at a time, comes back with its own pace
+      const { wpm, words, size } = this.#paces[to];
+      Object.assign(change, { wpm, words, size });
     }
     Object.assign(s, change);
     if (change.size) {
       // a larger size makes room by taking words off the frame (more words, in turn, step the size down: #fit)
       while (s.view === 'sequence' && s.words > 1 && !this.#fits(s.words, s.size)) s.words--;
     }
-    this.#paces[s.view] = { wpm: s.wpm, words: s.words, size: s.size };
-    if (s.words !== before) this.#reframe(word);
+    this.#paces[this.#paceKey()] = { wpm: s.wpm, words: s.words, size: s.size };
+    if ((this.#byBlock() ? 'paragraph' : String(s.words)) !== before) this.#reframe(word);
     else this.#retime();
+    this.#elapsed = 0;
     if (this.#playing) this.#schedule();
     this.#layout();
     this.#store();
@@ -1096,6 +1179,8 @@ export class FocusReader extends HTMLElement {
       }
       case 'words-':
       case 'words+': {
+        if (s.view === 'flow' && act === 'words+' && s.words >= WORDS_MAX && !s.para) return this.#set({ para: true }, 'A paragraph at a time');
+        if (s.view === 'flow' && act === 'words-' && s.para) return this.#set({ para: false }, `${this.#paces.flow.words} words at a time`);
         const words = clampWords(s.words + (act === 'words+' ? 1 : -1));
         // more words per frame: the size shown steps down to fit them (#fit); fewer, and it grows back to the one chosen
         return this.#set({ words }, `${words} ${words === 1 ? 'word' : 'words'} per frame`);
@@ -1121,7 +1206,7 @@ export class FocusReader extends HTMLElement {
   #store() {
     if (!this.hasAttribute('persist')) return;
     try {
-      localStorage.setItem(STORE, JSON.stringify({ view: this.#s.view, align: this.#s.align, underline: this.#s.underline, paces: this.#paces }));
+      localStorage.setItem(STORE, JSON.stringify({ view: this.#s.view, align: this.#s.align, underline: this.#s.underline, para: this.#s.para, paces: this.#paces }));
     } catch {
       /* private mode: nothing kept */
     }
@@ -1133,8 +1218,9 @@ export class FocusReader extends HTMLElement {
       const v = JSON.parse(localStorage.getItem(STORE) ?? '{}');
       if (ALIGNS.includes(v.align)) this.#s.align = v.align;
       if (typeof v.underline === 'boolean') this.#s.underline = v.underline;
+      if (typeof v.para === 'boolean') this.#s.para = v.para;
       if (VIEWS.includes(v.view)) this.#s.view = v.view;
-      for (const view of VIEWS) {
+      for (const view of [...VIEWS, 'paragraph'] as PaceKey[]) {
         const p = v.paces?.[view];
         if (!p) continue;
         const pace = this.#paces[view];
