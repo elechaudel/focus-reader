@@ -42,7 +42,9 @@ const WPM_MAX = 800;
 const WPM_STEP = 25;
 const WORDS_MAX = 6;
 /** how long the labels stay after the last move while it plays, ms */
-const QUIET_AFTER = 2500;
+const QUIET_AFTER = 2000;
+/** …and right after Play, sooner */
+const QUIET_AFTER_PLAY = 1000;
 /** settings kept in this browser; the version changes when the defaults do, so a new default is seen */
 const STORE = 'focus-reader.v3';
 /** how far a scroll or a swipe goes for one frame, px */
@@ -247,7 +249,7 @@ dialog button, dialog .seek { touch-action: manipulation; }
 }
 .text.instant { transition: none; }
 .text p { margin: 0 0 0.75em; }
-.text .w { color: var(--fr-ahead); transition: color 0.15s ease; cursor: pointer; }
+.text .w { color: var(--fr-ahead); transition: color 0.15s ease; }
 .text .w.read { color: var(--fr-muted); }
 .text .w.now { color: var(--fr-ink); text-decoration: underline; text-decoration-color: var(--fr-accent); text-decoration-thickness: 0.1em; text-underline-offset: 0.16em; text-decoration-skip-ink: none; }
 .text .h .w.read, .text .h .w.now { color: var(--fr-accent-text); }
@@ -298,7 +300,7 @@ const HTML = `
       <p class="context" data-context></p>
     </div>
     <div class="flow" data-flow tabindex="0" role="group" aria-roledescription="reader"
-      aria-label="Reading flow. Space to play or pause, left and right arrows to move by sentence, up and down arrows for speed, click a word to go to it.">
+      aria-label="Reading flow. Space to play or pause, left and right arrows to move by sentence, up and down arrows for speed.">
       <div class="ruler up" aria-hidden="true"></div>
       <div class="window" aria-hidden="true"><span class="mark"></span><div class="text" data-text></div></div>
       <div class="ruler down" aria-hidden="true"></div>
@@ -314,7 +316,7 @@ const HTML = `
     <div class="progress"><input class="seek" type="range" min="0" step="1" data-seek aria-label="Position in the text" /><span class="fill"></span></div>
     <div class="foot fade">
       <button type="button" class="label play" data-act="play" aria-pressed="false"><span data-state>Play</span></button>
-      <span class="label keys"><span class="desk-keys"><b>Space</b> play · <b>← →</b> sentence · <b>Scroll</b> word · <b>↑ ↓</b> speed · <b>Esc</b> close</span><span class="touch-keys">Tap the middle to pause, the sides for a sentence back or on, swipe for a word</span></span>
+      <span class="label keys"><span class="desk-keys"><b>Space</b> play · <b>← →</b> sentence · <b>Scroll</b> word · <b>↑ ↓</b> speed · <b>Esc</b> close</span><span class="touch-keys">Tap to play or pause, swipe for a word</span></span>
     </div>
   </div>
   <p class="vh" aria-live="polite" data-live></p>
@@ -357,6 +359,13 @@ export class FocusReader extends HTMLElement {
   #flowRead = 0;
   #flowNow: [number, number] = [0, 0];
   #flowTop = -1;
+  /** Flow: where the text stands (y), the line being read's own place, and how far a free scroll moved it from there */
+  #flowY = 0;
+  #flowBase = 0;
+  #free = 0;
+  #flowFrame = -1;
+  /** a touch scroll's glide, once the finger is up */
+  #glide = 0;
   #stage: HTMLElement;
   #chunk: HTMLElement;
   #ghost: HTMLElement;
@@ -389,7 +398,7 @@ export class FocusReader extends HTMLElement {
   /** scroll not yet turned into frames, px */
   #wheel = 0;
   /** a touch drag on the band */
-  #drag: { x: number; y: number; done: number; moved: boolean } | null = null;
+  #drag: { x: number; y: number; done: number; moved: boolean; free: number; t: number; v: number; ly: number } | null = null;
   #fullscreen = false;
   #ro?: ResizeObserver;
 
@@ -538,7 +547,7 @@ export class FocusReader extends HTMLElement {
     this.#say(`Playing at ${this.#s.wpm} words per minute`);
     this.#show(false);
     this.#schedule();
-    this.#wake();
+    this.#wake(QUIET_AFTER_PLAY);
   }
 
   pause() {
@@ -856,12 +865,37 @@ export class FocusReader extends HTMLElement {
     const anchor = Math.round(win.clientHeight * FLOW_ANCHOR);
     this.#fr.style.setProperty('--anchor', `${anchor}px`);
     const top = first.offsetTop;
-    if (top === this.#flowTop) return;
+    // a free scroll (paused) holds until the frame changes or it plays again
+    if (this.#i !== this.#flowFrame || this.#playing) this.#free = 0;
+    this.#flowFrame = this.#i;
     // a jump (a new text, a resize, a seek far away) moves at once; reading on moves a line, smoothly
     const far = this.#flowTop < 0 || Math.abs(top - this.#flowTop) > first.offsetHeight * 3;
-    this.#text.classList.toggle('instant', far);
     this.#flowTop = top;
-    this.#text.style.setProperty('--y', `${Math.round(anchor - top - first.offsetHeight / 2)}px`);
+    this.#flowBase = Math.round(anchor - top - first.offsetHeight / 2);
+    this.#flowAt(far);
+  }
+
+  /** Puts Flow's text where the line being read and the free scroll say. */
+  #flowAt(instant: boolean) {
+    const y = Math.round(this.#flowBase + this.#free);
+    if (y === this.#flowY && !instant) return;
+    this.#text.classList.toggle('instant', instant);
+    this.#flowY = y;
+    this.#text.style.setProperty('--y', `${y}px`);
+  }
+
+  /**
+   * Paused, Flow scrolls freely, at the pace of the hand: from the first line resting on the anchor to the last.
+   * Returns false when it does not apply (Sequence, or playing), for the scroll to go a frame back or on instead.
+   */
+  #scrollTo(free: number) {
+    if (this.#s.view !== 'flow' || this.#playing) return false;
+    const anchor = Math.round(this.#text.parentElement!.clientHeight * FLOW_ANCHOR);
+    const max = anchor - this.#flowBase;
+    const min = anchor - this.#text.offsetHeight - this.#flowBase;
+    this.#free = Math.max(min, Math.min(max, free));
+    this.#flowAt(true);
+    return true;
   }
 
   /** While paused: the whole sentence under the band, the frame in it marked, to read back if needed. */
@@ -1016,8 +1050,7 @@ export class FocusReader extends HTMLElement {
         else this.open();
       }
     });
-    // the band: the middle plays or pauses, the sides go a sentence back or on. A first tap on a quiet panel only
-    // brings the labels back.
+    // the band and the flow: a tap plays or pauses, a drag or a scroll moves (#gestures)
     for (const el of [this.#band, this.#flow]) this.#gestures(el);
     this.#fr.addEventListener('pointermove', (e) => {
       if (e.pointerType === 'mouse') this.#wake();
@@ -1043,15 +1076,15 @@ export class FocusReader extends HTMLElement {
   }
 
   /**
-   * Taps, drags and scrolls on the band or the flow. A tap: in Sequence, the middle plays or pauses and the sides
-   * go a sentence back or on; in Flow, a word goes there (the frame being read plays or pauses), and elsewhere it
-   * plays or pauses. A drag or a scroll goes a frame back or on. A first tap on a quiet panel only brings the
-   * labels back.
+   * Taps, drags and scrolls on the band or the flow. A tap or a click anywhere on them plays or pauses, and does
+   * nothing else. A drag or a scroll goes a frame back or on; in Flow while paused, it scrolls the text freely
+   * instead (a touch scroll glides on once the finger is up).
    */
   #gestures(el: HTMLElement) {
     el.addEventListener('pointerdown', (e) => {
+      cancelAnimationFrame(this.#glide);
       if (e.pointerType === 'mouse') return;
-      this.#drag = { x: e.clientX, y: e.clientY, done: 0, moved: false };
+      this.#drag = { x: e.clientX, y: e.clientY, done: 0, moved: false, free: this.#free, t: e.timeStamp, v: 0, ly: e.clientY };
     });
     // a drag on a touch screen goes a frame back or on every SWIPE_STEP px: up or left is on, down or right back
     el.addEventListener('pointermove', (e) => {
@@ -1059,8 +1092,13 @@ export class FocusReader extends HTMLElement {
       if (!d || e.pointerType === 'mouse') return;
       const dx = e.clientX - d.x;
       const dy = e.clientY - d.y;
-      if (!d.moved && Math.hypot(dx, dy) < 10) return;
+      if (!d.moved && Math.hypot(dx, dy) < 12) return;
       d.moved = true;
+      const dt = e.timeStamp - d.t;
+      if (dt > 0) d.v = 0.8 * ((e.clientY - d.ly) / dt) + 0.2 * d.v;
+      d.t = e.timeStamp;
+      d.ly = e.clientY;
+      if (this.#scrollTo(d.free + dy)) return;
       const v = Math.abs(dx) > Math.abs(dy) ? -dx : -dy;
       const steps = Math.trunc(v / SWIPE_STEP);
       if (steps !== d.done) {
@@ -1071,43 +1109,47 @@ export class FocusReader extends HTMLElement {
     el.addEventListener('pointercancel', () => (this.#drag = null));
     el.addEventListener('pointerup', (e) => {
       if (e.button !== 0) return;
-      const dragged = this.#drag?.moved;
+      const d = this.#drag;
       this.#drag = null;
-      if (dragged) return;
-      const wasQuiet = this.#fr.classList.contains('quiet');
       this.#wake();
-      if (wasQuiet && e.pointerType !== 'mouse') return;
-      if (el === this.#flow) {
-        const w = (e.target as Element).closest<HTMLElement>('.w');
-        const f = this.#frames[this.#i];
-        const i = w ? Number(w.dataset.i) : -1;
-        if (i < 0 || (f && i >= f.start && i < f.end)) this.toggle();
-        else this.#go(i);
+      if (d?.moved) {
+        if (this.#s.view === 'flow' && !this.#playing && !reducedMotion() && e.timeStamp - d.t < 80) this.#glideFrom(d.v);
         return;
       }
-      const r = el.getBoundingClientRect();
-      const x = (e.clientX - r.left) / r.width;
-      if (x < 0.25) this.#back();
-      else if (x > 0.75) this.#forward();
-      else this.toggle();
+      this.toggle();
     });
-    // a scroll goes a frame back or on, as a drag does: down or right is on
+    // a scroll goes a frame back or on, as a drag does: down or right is on (in Flow while paused: it scrolls)
     el.addEventListener(
       'wheel',
       (e) => {
         if (!this.#dialog.open && !this.#engaged) return;
         e.preventDefault();
         const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+        this.#wake();
+        if (this.#scrollTo(this.#free - e.deltaY * unit)) return;
         this.#wheel += (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * unit;
         const steps = Math.trunc(this.#wheel / SCROLL_STEP);
         if (steps) {
           this.#wheel -= steps * SCROLL_STEP;
           this.#step(steps);
         }
-        this.#wake();
       },
       { passive: false },
     );
+  }
+
+  /** A touch scroll in Flow goes on after the finger lifts, slowing down, as a page does. */
+  #glideFrom(v: number) {
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = Math.min(32, now - last);
+      last = now;
+      v *= Math.pow(0.95, dt / 16);
+      const before = this.#free;
+      if (Math.abs(v) < 0.02 || !this.#scrollTo(this.#free + v * dt) || this.#free === before) return;
+      this.#glide = requestAnimationFrame(tick);
+    };
+    this.#glide = requestAnimationFrame(tick);
   }
 
   /**
@@ -1171,17 +1213,20 @@ export class FocusReader extends HTMLElement {
     }
   }
 
-  /** Labels back; while it plays, they fade out again after QUIET_AFTER without a move. */
-  #wake() {
+  /**
+   * Labels back; while it plays, they fade out again after `after` ms without a move (sooner right after Play).
+   * They stay while a control has the keyboard's focus, so it never sits on something invisible; a control a
+   * click or a tap focused does not hold them.
+   */
+  #wake(after = QUIET_AFTER) {
     this.#fr.classList.remove('quiet');
     clearTimeout(this.#quietTimer);
     if (!this.#playing) return;
     this.#quietTimer = window.setTimeout(() => {
-      // keep them while the keyboard is on a control, so focus never sits on something invisible
       const active = this.#root.activeElement;
-      if (active && active !== this.#band && active !== this.#flow) return;
+      if (active && active !== this.#band && active !== this.#flow && active.matches(':focus-visible')) return;
       if (this.#playing) this.#fr.classList.add('quiet');
-    }, QUIET_AFTER);
+    }, after);
   }
 
   #say(text: string) {
