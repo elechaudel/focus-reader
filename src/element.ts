@@ -259,7 +259,9 @@ dialog button, dialog .seek { touch-action: manipulation; }
 .text p { margin: 0 0 0.75em; }
 .text .w { color: var(--fr-ahead); transition: color 0.15s ease; }
 .text .w.read { color: var(--fr-muted); }
-.text .w.now { color: var(--fr-ink); text-decoration: underline; text-decoration-color: var(--fr-accent); text-decoration-thickness: 0.1em; text-underline-offset: 0.16em; text-decoration-skip-ink: none; }
+.text .w.now { color: var(--fr-ink); }
+/* the frame's underline: one bar per line, from its first word to its last, spaces included */
+.text .under { position: absolute; height: 0.1em; background: var(--fr-accent); pointer-events: none; }
 .text .h .w.read, .text .h .w.now { color: var(--fr-accent-text); }
 
 @media (prefers-reduced-motion: reduce) {
@@ -894,6 +896,39 @@ export class FocusReader extends HTMLElement {
     for (let k = now[0]; k < now[1]; k++) els[k].classList.add('now');
     this.#flowRead = read;
     this.#flowNow = now;
+    this.#underline();
+  }
+
+  /**
+   * The frame's underline, drawn as bars rather than each word's own: one per line the frame covers, running
+   * through the spaces between its words, cut where the line breaks. Measured from a range over the frame.
+   */
+  #underline() {
+    const [a, b] = this.#flowNow;
+    const lines: { left: number; right: number; bottom: number }[] = [];
+    if (b > a) {
+      const range = document.createRange();
+      range.setStartBefore(this.#wordEls[a]);
+      range.setEndAfter(this.#wordEls[b - 1]);
+      const box = this.#text.getBoundingClientRect();
+      for (const rc of Array.from(range.getClientRects())) {
+        if (!rc.width) continue;
+        const bottom = Math.round(rc.bottom - box.top);
+        const line = lines.find((l) => Math.abs(l.bottom - bottom) < 4);
+        if (line) {
+          line.left = Math.min(line.left, rc.left - box.left);
+          line.right = Math.max(line.right, rc.right - box.left);
+        } else lines.push({ left: rc.left - box.left, right: rc.right - box.left, bottom });
+      }
+    }
+    for (const bar of this.#text.querySelectorAll('.under')) bar.remove();
+    for (const l of lines) {
+      const bar = document.createElement('span');
+      bar.className = 'under';
+      // just under the words' descenders, where an underline sits
+      Object.assign(bar.style, { left: `${l.left}px`, width: `${l.right - l.left}px`, top: `calc(${l.bottom}px - 0.06em)` });
+      this.#text.append(bar);
+    }
   }
 
   /** Puts Flow's text where the line being read and the free scroll say. */
