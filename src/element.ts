@@ -21,6 +21,9 @@ import { blocksFromElement, blocksFromText, frameAt, frames, orp, parse, schedul
 export type Align = 'left' | 'center' | 'pivot';
 export type Size = 's' | 'm' | 'l' | 'xl';
 export type View = 'sequence' | 'flow';
+/** what each view keeps of its own: Flow reads more words at a time, and faster */
+type Pace = { wpm: number; words: number; size: Size };
+const PACES: Record<View, Pace> = { sequence: { wpm: 150, words: 1, size: 'm' }, flow: { wpm: 300, words: 6, size: 'm' } };
 
 const VIEWS: View[] = ['sequence', 'flow'];
 const VIEW_LABEL: Record<View, string> = { sequence: 'Sequence', flow: 'Flow' };
@@ -46,7 +49,7 @@ const QUIET_AFTER = 2000;
 /** …and right after Play, at once: the fade (0.35 s) is the only delay */
 const QUIET_AFTER_PLAY = 0;
 /** settings kept in this browser; the version changes when the defaults do, so a new default is seen */
-const STORE = 'focus-reader.v3';
+const STORE = 'focus-reader.v4';
 /** how far a scroll or a swipe goes for one frame, px */
 const SCROLL_STEP = 40;
 const SWIPE_STEP = 28;
@@ -157,9 +160,10 @@ dialog button, dialog .seek { touch-action: manipulation; }
 .ruler {
   position: relative; height: 12px;
   background:
-    linear-gradient(var(--fr-ink), var(--fr-ink)) 0 var(--y) / 100% 1px no-repeat,
-    repeating-linear-gradient(90deg, var(--fr-ink) 0 1px, transparent 1px 80px) 0 var(--y) / 100% 9px no-repeat,
-    repeating-linear-gradient(90deg, var(--fr-faint) 0 1px, transparent 1px 16px) 0 var(--y) / 100% 5px no-repeat;
+    linear-gradient(var(--fr-ink), var(--fr-ink)) 0 var(--y) / 100% 1px no-repeat border-box,
+    repeating-linear-gradient(90deg, var(--fr-ink) 0 1px, transparent 1px 80px) 0 var(--y) / calc(100% - 6px) 9px no-repeat border-box,
+    repeating-linear-gradient(90deg, var(--fr-faint) 0 1px, transparent 1px 16px) 0 var(--y) / calc(100% - 6px) 5px no-repeat border-box;
+  /* the end caps; the ticks start under the left one and stop short of the right one, so no two lines touch */
   border-left: 1px solid var(--fr-ink); border-right: 1px solid var(--fr-ink);
 }
 .ruler.up { --y: 100%; }
@@ -239,6 +243,10 @@ dialog button, dialog .seek { touch-action: manipulation; }
 [data-view='flow'] .flow { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
 .flow:focus-visible .window { outline: 1px dotted var(--fr-ink); outline-offset: -1px; }
 .playing .flow:focus-visible .window { outline: none; }
+/* on a touch screen the reading area takes the focus when it opens, not from a keyboard: no ring */
+@media (pointer: coarse) {
+  .band:focus-visible .stage, .flow:focus-visible .window { outline: none; }
+}
 .window { position: relative; overflow: hidden; }
 .window .mark { left: var(--marker); top: calc(var(--anchor) - 4px); width: 9px; height: 9px; margin-left: -28px; background: var(--fr-accent); }
 .window .mark::after { display: none; }
@@ -379,7 +387,9 @@ export class FocusReader extends HTMLElement {
   #ms: number[] = [];
   #after: number[] = [];
   #i = 0;
-  #s: Settings = { wpm: 150, words: 1, size: 'm', align: 'left', view: 'sequence' };
+  #s: Settings = { ...PACES.sequence, align: 'left', view: 'sequence' };
+  /** each view's own pace, the one shown included (kept in step by #set) */
+  #paces: Record<View, Pace> = { sequence: { ...PACES.sequence }, flow: { ...PACES.flow } };
   /** the size shown: the one chosen, or smaller if the words per frame need it */
   #effSize: Size = 'm';
   /** text size in px for the size shown */
@@ -424,12 +434,15 @@ export class FocusReader extends HTMLElement {
   connectedCallback() {
     const a = (n: string) => this.getAttribute(n);
     const s = this.#s;
-    s.wpm = clampWpm(Number(a('wpm')) || s.wpm);
-    s.words = clampWords(Number(a('words')) || s.words);
-    if (SIZES.includes(a('size') as Size)) s.size = a('size') as Size;
-    if (ALIGNS.includes(a('align') as Align)) s.align = a('align') as Align;
+    // wpm, words and size set the pace of the view it starts in; the other keeps its own
     if (VIEWS.includes(a('view') as View)) s.view = a('view') as View;
-    if (this.hasAttribute('persist')) Object.assign(s, this.#restore());
+    if (ALIGNS.includes(a('align') as Align)) s.align = a('align') as Align;
+    const pace = this.#paces[s.view];
+    pace.wpm = clampWpm(Number(a('wpm')) || pace.wpm);
+    pace.words = clampWords(Number(a('words')) || pace.words);
+    if (SIZES.includes(a('size') as Size)) pace.size = a('size') as Size;
+    if (this.hasAttribute('persist')) this.#restore();
+    Object.assign(s, this.#paces[s.view]);
     // the view reads back as an attribute, for the page to show which one is on
     if (this.getAttribute('view') !== s.view) this.setAttribute('view', s.view);
 
@@ -508,7 +521,7 @@ export class FocusReader extends HTMLElement {
     this.#engage(true);
     this.#labels();
     this.#layout();
-    this.#target().focus();
+    this.#target().focus({ focusVisible: false } as FocusOptions);
     this.#wake();
     this.dispatchEvent(new CustomEvent('focusreaderopen', { bubbles: true }));
   }
@@ -998,11 +1011,16 @@ export class FocusReader extends HTMLElement {
     const word = this.#frames[this.#i]?.start ?? 0;
     const s = this.#s;
     const before = s.words;
+    if (change.view && change.view !== s.view) {
+      // each view comes back with its own pace
+      Object.assign(change, this.#paces[change.view]);
+    }
     Object.assign(s, change);
     if (change.size) {
       // a larger size makes room by taking words off the frame (more words, in turn, step the size down: #fit)
       while (s.view === 'sequence' && s.words > 1 && !this.#fits(s.words, s.size)) s.words--;
     }
+    this.#paces[s.view] = { wpm: s.wpm, words: s.words, size: s.size };
     if (s.words !== before) this.#reframe(word);
     else this.#retime();
     if (this.#playing) this.#schedule();
@@ -1052,24 +1070,28 @@ export class FocusReader extends HTMLElement {
   #store() {
     if (!this.hasAttribute('persist')) return;
     try {
-      localStorage.setItem(STORE, JSON.stringify(this.#s));
+      localStorage.setItem(STORE, JSON.stringify({ view: this.#s.view, align: this.#s.align, paces: this.#paces }));
     } catch {
       /* private mode: nothing kept */
     }
   }
 
-  #restore(): Partial<Settings> {
+  /** The view, the alignment and each view's pace, as this browser kept them. */
+  #restore() {
     try {
       const v = JSON.parse(localStorage.getItem(STORE) ?? '{}');
-      const out: Partial<Settings> = {};
-      if (typeof v.wpm === 'number') out.wpm = clampWpm(v.wpm);
-      if (typeof v.words === 'number') out.words = clampWords(v.words);
-      if (SIZES.includes(v.size)) out.size = v.size;
-      if (ALIGNS.includes(v.align)) out.align = v.align;
-      if (VIEWS.includes(v.view)) out.view = v.view;
-      return out;
+      if (ALIGNS.includes(v.align)) this.#s.align = v.align;
+      if (VIEWS.includes(v.view)) this.#s.view = v.view;
+      for (const view of VIEWS) {
+        const p = v.paces?.[view];
+        if (!p) continue;
+        const pace = this.#paces[view];
+        if (typeof p.wpm === 'number') pace.wpm = clampWpm(p.wpm);
+        if (typeof p.words === 'number') pace.words = clampWords(p.words);
+        if (SIZES.includes(p.size)) pace.size = p.size;
+      }
     } catch {
-      return {};
+      /* nothing kept, or private mode */
     }
   }
 
