@@ -31,7 +31,7 @@ const WORDS_MAX = 6;
 /** how long the labels stay after the last move while it plays, ms */
 const QUIET_AFTER = 2500;
 /** settings kept in this browser; the version changes when the defaults do, so a new default is seen */
-const STORE = 'focus-reader.v2';
+const STORE = 'focus-reader.v3';
 /** how far a scroll or a swipe goes for one frame, px */
 const SCROLL_STEP = 40;
 const SWIPE_STEP = 28;
@@ -200,8 +200,6 @@ dialog button, dialog .seek { touch-action: manipulation; }
 .keys b { font-weight: inherit; color: var(--fr-ink); }
 .touch-keys { display: none; }
 @media (pointer: coarse) { .desk-keys { display: none; } .touch-keys { display: inline; } }
-.turn { display: none; color: var(--fr-muted); }
-.portrait:not(.playing) .turn { display: block; }
 
 /* small panels: fewer words around the band */
 @container (max-width: 560px) {
@@ -259,7 +257,6 @@ const HTML = `
     </div>
     <div class="below">
       <p class="context" data-context></p>
-      <p class="label turn" data-turn>Turn your phone sideways for a longer line</p>
     </div>
   </div>
   <div class="bottom">
@@ -319,7 +316,7 @@ export class FocusReader extends HTMLElement {
   #ms: number[] = [];
   #after: number[] = [];
   #i = 0;
-  #s: Settings = { wpm: 200, words: 1, size: 'm', align: 'left' };
+  #s: Settings = { wpm: 150, words: 1, size: 'm', align: 'left' };
   /** the size shown: the one chosen, or smaller if the words per frame need it */
   #effSize: Size = 'm';
   /** text size in px for the size shown */
@@ -341,7 +338,6 @@ export class FocusReader extends HTMLElement {
   #drag: { x: number; y: number; done: number; moved: boolean } | null = null;
   #fullscreen = false;
   #ro?: ResizeObserver;
-  #mqPortrait = matchMedia('(orientation: portrait)');
 
   constructor() {
     super();
@@ -378,7 +374,6 @@ export class FocusReader extends HTMLElement {
       this.#widths.clear();
       this.#layout();
     });
-    this.#mqPortrait.addEventListener('change', this.#onOrientation);
     document.addEventListener('keydown', this.#onKey);
     document.addEventListener('pointerdown', this.#onPointerDown, true);
     this.#layout();
@@ -388,7 +383,6 @@ export class FocusReader extends HTMLElement {
     this.#stop();
     clearTimeout(this.#quietTimer);
     this.#ro?.disconnect();
-    this.#mqPortrait.removeEventListener('change', this.#onOrientation);
     document.removeEventListener('keydown', this.#onKey);
     document.removeEventListener('pointerdown', this.#onPointerDown, true);
     if (this.#dialog.open) this.close();
@@ -626,11 +620,9 @@ export class FocusReader extends HTMLElement {
     if (!w || !h) return;
     this.#fit();
     this.#fr.style.setProperty('--marker', `${MARKER[this.#s.align] * 100}%`);
-    this.#fr.classList.toggle('portrait', this.#dialog.open && coarse() && this.#mqPortrait.matches);
     this.#show(false);
   }
 
-  #onOrientation = () => this.#layout();
 
   #sizePx(size: Size) {
     const w = this.#fr.clientWidth;

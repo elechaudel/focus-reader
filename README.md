@@ -12,7 +12,7 @@
 
 - `for`: id of the element whose text it reads (an article's body, a `<template>`). Without it, a `<template>` inside the element, or else its own content. Paragraphs, headings, list items and quotes are read; code blocks, figures, media, tables and anything with `data-focus-skip` are not.
 - `heading`: the title at the top. `name`: the label before it (default "Focus reader").
-- `wpm` (100–800, default 200), `words` per frame (1–6, default 1), `size` (`s`, `m`, `l`, `xl`, default `m`), `align` (`left` on a marker, `center` like subtitles, `pivot` on the recognition point as Spritz does).
+- `wpm` (100–800, default 150), `words` per frame (1–6, default 1), `size` (`s`, `m`, `l`, `xl`, default `m`), `align` (`left` on a marker, `center` like subtitles, `pivot` on the recognition point as Spritz does).
 - `modal`: hidden until opened. Without it, the reader sits in the page, filling its box, and opens to the full window from its own button.
 - `persist`: remembers the settings in this browser (`localStorage`).
 - Methods: `open()`, `close()`, `play()`, `pause()`, `toggle()`, `reload()`. Events: `focusreaderopen`, `focusreaderclose`.
