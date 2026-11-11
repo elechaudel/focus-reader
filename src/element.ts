@@ -240,6 +240,9 @@ dialog button, dialog .seek { touch-action: manipulation; }
 /* Flow: the whole text between the rulers, moving up a line at a time */
 .flow { display: none; grid-row: 1 / -1; min-height: 0; outline: none; touch-action: manipulation; user-select: none; -webkit-user-select: none; padding: 16px 0; }
 [data-view='flow'] .band, [data-view='flow'] .below, [data-view='flow'] .align-setting { display: none; }
+/* Underline is Flow's own setting */
+.fr:not([data-view='flow']) .underline-setting { display: none; }
+.no-underline .text .under { display: none; }
 [data-view='flow'] .flow { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
 .flow:focus-visible .window { outline: 1px dotted var(--fr-ink); outline-offset: -1px; }
 .playing .flow:focus-visible .window { outline: none; }
@@ -297,6 +300,8 @@ const HTML = `
         <button type="button" class="step" data-act="size+" aria-label="Larger text">+</button></span>
       <span class="setting align-setting"><span>Align</span>
         <button type="button" class="align" data-act="align"></button></span>
+      <span class="setting underline-setting"><span>Underline</span>
+        <button type="button" class="align" data-act="underline"></button></span>
     </div>
   </div>
   <div class="middle">
@@ -340,6 +345,8 @@ interface Settings {
   size: Size;
   align: Align;
   view: View;
+  /** Flow: the frame being read underlined, or only in ink */
+  underline: boolean;
 }
 
 /**
@@ -389,7 +396,7 @@ export class FocusReader extends HTMLElement {
   #ms: number[] = [];
   #after: number[] = [];
   #i = 0;
-  #s: Settings = { ...PACES.sequence, align: 'left', view: 'sequence' };
+  #s: Settings = { ...PACES.sequence, align: 'left', view: 'sequence', underline: true };
   /** each view's own pace, the one shown included (kept in step by #set) */
   #paces: Record<View, Pace> = { sequence: { ...PACES.sequence }, flow: { ...PACES.flow } };
   /** the size shown: the one chosen, or smaller if the words per frame need it */
@@ -439,6 +446,7 @@ export class FocusReader extends HTMLElement {
     // wpm, words and size set the pace of the view it starts in; the other keeps its own
     if (VIEWS.includes(a('view') as View)) s.view = a('view') as View;
     if (ALIGNS.includes(a('align') as Align)) s.align = a('align') as Align;
+    if (a('underline') === 'off') s.underline = false;
     const pace = this.#paces[s.view];
     pace.wpm = clampWpm(Number(a('wpm')) || pace.wpm);
     pace.words = clampWords(Number(a('words')) || pace.words);
@@ -709,6 +717,7 @@ export class FocusReader extends HTMLElement {
     const h = this.#fr.clientHeight;
     if (!w || !h) return;
     this.#fr.dataset.view = this.#s.view;
+    this.#fr.classList.toggle('no-underline', !this.#s.underline);
     this.#fit();
     this.#fr.style.setProperty('--marker', `${MARKER[this.#s.view === 'flow' ? 'left' : this.#s.align] * 100}%`);
     if (this.#s.view === 'flow') {
@@ -1036,6 +1045,9 @@ export class FocusReader extends HTMLElement {
     q('[data-act="words+"]').disabled = s.words >= WORDS_MAX || (s.view === 'sequence' && !this.#fits(s.words + 1, 's'));
     q('[data-act="view"]').textContent = VIEW_LABEL[s.view];
     q('[data-act="view"]').setAttribute('aria-label', `View: ${VIEW_LABEL[s.view]}. Change`);
+    q('[data-act="underline"]').textContent = s.underline ? 'On' : 'Off';
+    q('[data-act="underline"]').setAttribute('aria-pressed', String(s.underline));
+    q('[data-act="underline"]').setAttribute('aria-label', 'Underline the words being read');
     q('[data-act="size-"]').disabled = this.#effSize === 's';
     q('[data-act="size+"]').disabled = this.#effSize === 'xl';
   }
@@ -1095,6 +1107,8 @@ export class FocusReader extends HTMLElement {
         const view = VIEWS[(VIEWS.indexOf(s.view) + 1) % VIEWS.length];
         return this.#set({ view }, `${VIEW_LABEL[view]} view`);
       }
+      case 'underline':
+        return this.#set({ underline: !s.underline }, s.underline ? 'Underline off' : 'Underline on');
       case 'align': {
         const align = ALIGNS[(ALIGNS.indexOf(s.align) + 1) % ALIGNS.length];
         return this.#set({ align }, `Aligned ${ALIGN_LABEL[align].toLowerCase()}`);
@@ -1105,7 +1119,7 @@ export class FocusReader extends HTMLElement {
   #store() {
     if (!this.hasAttribute('persist')) return;
     try {
-      localStorage.setItem(STORE, JSON.stringify({ view: this.#s.view, align: this.#s.align, paces: this.#paces }));
+      localStorage.setItem(STORE, JSON.stringify({ view: this.#s.view, align: this.#s.align, underline: this.#s.underline, paces: this.#paces }));
     } catch {
       /* private mode: nothing kept */
     }
@@ -1116,6 +1130,7 @@ export class FocusReader extends HTMLElement {
     try {
       const v = JSON.parse(localStorage.getItem(STORE) ?? '{}');
       if (ALIGNS.includes(v.align)) this.#s.align = v.align;
+      if (typeof v.underline === 'boolean') this.#s.underline = v.underline;
       if (VIEWS.includes(v.view)) this.#s.view = v.view;
       for (const view of VIEWS) {
         const p = v.paces?.[view];
