@@ -51,8 +51,11 @@ const QUIET_AFTER_PLAY = 0;
 /** settings kept in this browser; the version changes when the defaults do, so a new default is seen */
 const STORE = 'focus-reader.v4';
 /** how far a scroll or a swipe goes for one frame, px */
-const SCROLL_STEP = 40;
-const SWIPE_STEP = 28;
+const SCROLL_STEP = 32;
+/** how fast a glide slows down, each millisecond (a phone's own scroll is close to 0.998) */
+const GLIDE_DECAY = 0.997;
+/** a wheel's notch as a glide's speed: px of the notch to px/ms, so a notch of 100 px glides about 120 px */
+const WHEEL_GLIDE = 0.0036;
 
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const coarse = () => matchMedia('(pointer: coarse)').matches;
@@ -382,8 +385,9 @@ export class FocusReader extends HTMLElement {
   #flowBase = 0;
   #free = 0;
   #flowFrame = -1;
-  /** a touch scroll's glide, once the finger is up */
-  #glide = 0;
+  /** the glide after a flick or a wheel's notch: its speed in px/ms, and whether it runs */
+  #glideV = 0;
+  #gliding = false;
   #stage: HTMLElement;
   #chunk: HTMLElement;
   #ghost: HTMLElement;
@@ -418,7 +422,7 @@ export class FocusReader extends HTMLElement {
   /** scroll not yet turned into frames, px */
   #wheel = 0;
   /** a touch drag on the band */
-  #drag: { x: number; y: number; done: number; moved: boolean; t: number; v: number; ly: number } | null = null;
+  #drag: { x: number; y: number; lx: number; ly: number; moved: boolean; t: number; v: number } | null = null;
   #fullscreen = false;
   #ro?: ResizeObserver;
 
@@ -1182,30 +1186,25 @@ export class FocusReader extends HTMLElement {
    */
   #gestures(el: HTMLElement) {
     el.addEventListener('pointerdown', (e) => {
-      cancelAnimationFrame(this.#glide);
+      this.#glideV = 0;
       if (e.pointerType === 'mouse') return;
-      this.#drag = { x: e.clientX, y: e.clientY, done: 0, moved: false, t: e.timeStamp, v: 0, ly: e.clientY };
+      this.#drag = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, t: e.timeStamp, v: 0 };
     });
-    // a drag on a touch screen goes a frame back or on every SWIPE_STEP px: up or left is on, down or right back
+    // a drag on a touch screen moves the text in Flow (paused), or goes a frame back or on every SCROLL_STEP px
     el.addEventListener('pointermove', (e) => {
       const d = this.#drag;
       if (!d || e.pointerType === 'mouse') return;
-      const dx = e.clientX - d.x;
-      const dy = e.clientY - d.y;
-      if (!d.moved && Math.hypot(dx, dy) < 12) return;
+      if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 12) return;
       d.moved = true;
+      // Flow follows the finger up and down; Sequence takes the way it mostly goes, left or up being on
+      const across = this.#s.view === 'sequence' && Math.abs(e.clientX - d.x) > Math.abs(e.clientY - d.y);
+      const px = across ? e.clientX - d.lx : e.clientY - d.ly;
       const dt = e.timeStamp - d.t;
-      const step = e.clientY - d.ly;
-      if (dt > 0) d.v = 0.8 * (step / dt) + 0.2 * d.v;
+      if (dt > 0) d.v = 0.8 * (px / dt) + 0.2 * d.v;
       d.t = e.timeStamp;
+      d.lx = e.clientX;
       d.ly = e.clientY;
-      if (this.#scrollBy(step)) return;
-      const v = Math.abs(dx) > Math.abs(dy) ? -dx : -dy;
-      const steps = Math.trunc(v / SWIPE_STEP);
-      if (steps !== d.done) {
-        this.#step(steps - d.done);
-        d.done = steps;
-      }
+      this.#move(px);
     });
     el.addEventListener('pointercancel', () => (this.#drag = null));
     el.addEventListener('pointerup', (e) => {
@@ -1214,43 +1213,72 @@ export class FocusReader extends HTMLElement {
       this.#drag = null;
       this.#wake();
       if (d?.moved) {
-        if (this.#s.view === 'flow' && !this.#playing && !reducedMotion() && e.timeStamp - d.t < 80) this.#glideFrom(d.v);
+        // a flick goes on once the finger is up
+        if (e.timeStamp - d.t < 80) this.#glideBy(d.v);
         return;
       }
       this.toggle();
     });
-    // a scroll goes a frame back or on, as a drag does: down or right is on (in Flow while paused: it scrolls)
+    // a scroll moves as a drag does: down or right is on. A trackpad's own glide arrives as more scroll events;
+    // a mouse wheel's notches (large, or counted in lines) glide here, so a spun wheel runs on too.
     el.addEventListener(
       'wheel',
       (e) => {
         if (!this.#dialog.open && !this.#engaged) return;
         e.preventDefault();
-        const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
         this.#wake();
-        if (this.#scrollBy(-e.deltaY * unit)) return;
-        this.#wheel += (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * unit;
-        const steps = Math.trunc(this.#wheel / SCROLL_STEP);
-        if (steps) {
-          this.#wheel -= steps * SCROLL_STEP;
-          this.#step(steps);
-        }
+        const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+        const on = (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * unit;
+        if (e.deltaMode !== 0 || Math.abs(on) >= 50) this.#glideBy(-on * WHEEL_GLIDE, true);
+        else this.#move(-on);
       },
       { passive: false },
     );
   }
 
-  /** A touch scroll in Flow goes on after the finger lifts, slowing down, as a page does. */
-  #glideFrom(v: number) {
+  /**
+   * Moves by `px` as a hand would: in Flow while paused, the text itself (the reading place follows); otherwise
+   * a frame back or on every SCROLL_STEP px, up or left being on.
+   */
+  #move(px: number) {
+    if (this.#scrollBy(px)) return;
+    this.#wheel -= px;
+    const steps = Math.trunc(this.#wheel / SCROLL_STEP);
+    if (steps) {
+      this.#wheel -= steps * SCROLL_STEP;
+      this.#step(steps);
+    }
+  }
+
+  /**
+   * Goes on moving after a flick or a wheel's notch, slowing down as a page does on a phone (GLIDE_DECAY a
+   * millisecond), until it nearly stops, reaches an end, or reading starts. Each new notch adds to the speed, so
+   * a wheel spun freely keeps it going. Paused only; with reduced motion, a notch moves at once instead.
+   */
+  #glideBy(v: number, add = false) {
+    if (this.#playing || reducedMotion()) {
+      if (add) this.#move(v / WHEEL_GLIDE);
+      return;
+    }
+    this.#glideV = add ? this.#glideV + v : v;
+    if (this.#gliding) return;
+    this.#gliding = true;
     let last = performance.now();
     const tick = (now: number) => {
       const dt = Math.min(32, now - last);
       last = now;
-      v *= Math.pow(0.95, dt / 16);
-      const before = this.#flowY;
-      if (Math.abs(v) < 0.02 || !this.#scrollBy(v * dt) || this.#flowY === before) return;
-      this.#glide = requestAnimationFrame(tick);
+      this.#glideV *= Math.pow(GLIDE_DECAY, dt);
+      const at = `${this.#i}|${this.#flowY}`;
+      this.#move(this.#glideV * dt);
+      const stuck = at === `${this.#i}|${this.#flowY}` && Math.abs(this.#glideV * dt) >= 1 && this.#s.view === 'flow';
+      if (Math.abs(this.#glideV) < 0.015 || this.#playing || stuck) {
+        this.#glideV = 0;
+        this.#gliding = false;
+        return;
+      }
+      requestAnimationFrame(tick);
     };
-    this.#glide = requestAnimationFrame(tick);
+    requestAnimationFrame(tick);
   }
 
   /**
