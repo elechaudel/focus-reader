@@ -39,8 +39,9 @@ const VIEW_LABEL: Record<View, string> = { sequence: 'Sequence', flow: 'Flow' };
 const FLOW_SIZE: Record<Size, [number, number]> = { s: [16, 0.012], m: [18, 0.018], l: [20, 0.026], xl: [22, 0.036] };
 /** where the line being read rests in Flow, as a share of the window's height */
 const FLOW_ANCHOR = 0.38;
-/** …and a paragraph's first line, higher, so most of the paragraph shows under it */
-const FLOW_ANCHOR_PARA = 0.14;
+/** …and a paragraph's middle, a little above the window's (its first line never above PARA_TOP) */
+const FLOW_ANCHOR_PARA = 0.45;
+const PARA_TOP = 0.08;
 
 const SIZES: Size[] = ['s', 'm', 'l', 'xl'];
 /** text size as a share of the panel (its width, at least 560 px, or 1.6 × its height if that is smaller) */
@@ -870,6 +871,21 @@ export class FocusReader extends HTMLElement {
     this.#shownAt = performance.now();
   }
 
+  /**
+   * Where the text stands (y) for frame `i` to rest on the anchor: its first line's middle on it, or, a paragraph
+   * at a time, the paragraph's middle, with its first line kept below PARA_TOP of the window.
+   */
+  #baseFor(i: number) {
+    const f = this.#frames[i];
+    const first = this.#wordEls[f.start];
+    const anchor = this.#anchor();
+    if (!this.#byBlock()) return Math.round(anchor - first.offsetTop - first.offsetHeight / 2);
+    const last = this.#wordEls[f.end - 1];
+    const top = first.offsetTop;
+    const y = anchor - (top + (last.offsetTop + last.offsetHeight - top) / 2);
+    return Math.round(Math.max(y, this.#text.parentElement!.clientHeight * PARA_TOP - top));
+  }
+
   /** How long the frame on screen has shown so far, ms. */
   #shownFor() {
     return this.#elapsed + (this.#playing && this.#timer ? performance.now() - this.#shownAt : 0);
@@ -929,7 +945,7 @@ export class FocusReader extends HTMLElement {
     this.#flowFrame = this.#i;
     const far = this.#flowTop < 0 || (!next && Math.abs(top - this.#flowTop) > first.offsetHeight * 3);
     this.#flowTop = top;
-    this.#flowBase = Math.round(anchor - top - first.offsetHeight / 2);
+    this.#flowBase = this.#baseFor(this.#i);
     this.#flowAt(far);
     this.#paceLine();
   }
@@ -1045,7 +1061,7 @@ export class FocusReader extends HTMLElement {
     const first = this.#wordEls[this.#frames[i].start];
     this.#flowFrame = i;
     this.#flowTop = first.offsetTop;
-    this.#flowBase = Math.round(anchor - first.offsetTop - first.offsetHeight / 2);
+    this.#flowBase = this.#baseFor(i);
     this.#free = y - this.#flowBase;
     this.#flowAt(true);
     if (this.#byBlock()) this.#paceLine();
