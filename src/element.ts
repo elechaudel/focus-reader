@@ -261,6 +261,8 @@ dialog button, dialog .seek { touch-action: manipulation; }
 .no-underline .text .under { display: none; }
 /* Flow a paragraph at a time: the paragraph in ink, no underline, and the pace line where the marker was */
 .para .text .under, .para .underline-setting, .para .window .mark { display: none; }
+/* a paragraph moves further than a line: a little longer */
+.para .text { --move: 0.6s; }
 .text .pace { position: absolute; left: -26px; width: 3px; background: var(--fr-rule); pointer-events: none; }
 .text .pace > span { position: absolute; inset: 0; background: var(--fr-accent); transform-origin: 50% 0; transform: scaleY(0); }
 [data-view='flow'] .flow { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
@@ -276,7 +278,7 @@ dialog button, dialog .seek { touch-action: manipulation; }
 .text {
   position: absolute; left: var(--marker); right: 8px; top: 0; max-width: 24em;
   font-family: var(--fr-font-text); font-weight: 600; font-size: var(--flow-size); line-height: 1.22;
-  transform: translateY(var(--y, 0px)); transition: transform 0.35s cubic-bezier(0.65, 0, 0.35, 1);
+  transform: translateY(var(--y, 0px)); transition: transform var(--move, 0.35s) cubic-bezier(0.65, 0, 0.35, 1);
 }
 .text.instant { transition: none; }
 .text p { margin: 0 0 0.75em; }
@@ -592,7 +594,7 @@ export class FocusReader extends HTMLElement {
     if (this.#done) {
       this.#done = false;
       this.#i = 0;
-      this.#elapsed = 0;
+      this.#restartFrame();
     }
     this.#playing = true;
     this.#started = true;
@@ -649,7 +651,7 @@ export class FocusReader extends HTMLElement {
   /** Frames for the current words per frame, keeping the place: the frame that holds word `word`. */
   #reframe(word: number) {
     this.#frames = frames(this.#doc, this.#s.words, this.#byBlock());
-    this.#elapsed = 0;
+    this.#restartFrame();
     this.#i = this.#frames.length ? frameAt(this.#frames, word) : 0;
     this.#retime();
   }
@@ -681,7 +683,7 @@ export class FocusReader extends HTMLElement {
     if (!this.#playing) return;
     this.#shownAt = performance.now();
     this.#timer = window.setTimeout(() => {
-      this.#elapsed = 0;
+      this.#restartFrame();
       if (this.#i >= this.#frames.length - 1) {
         this.#playing = false;
         this.#done = true;
@@ -707,7 +709,7 @@ export class FocusReader extends HTMLElement {
     this.#done = false;
     this.#started = true;
     this.#i = frameAt(this.#frames, Math.max(0, Math.min(w, this.#doc.words.length - 1)));
-    this.#elapsed = 0;
+    this.#restartFrame();
     this.#show(false);
     if (this.#playing) this.#schedule();
   }
@@ -718,7 +720,7 @@ export class FocusReader extends HTMLElement {
     this.#done = false;
     this.#started = true;
     this.#i = Math.max(0, Math.min(this.#frames.length - 1, this.#i + n));
-    this.#elapsed = 0;
+    this.#restartFrame();
     this.#show(false);
     if (this.#playing) this.#schedule();
   }
@@ -862,6 +864,12 @@ export class FocusReader extends HTMLElement {
     return Math.round(this.#text.parentElement!.clientHeight * (this.#byBlock() ? FLOW_ANCHOR_PARA : FLOW_ANCHOR));
   }
 
+  /** A new frame on screen (or the same one from the top): no time shown yet, from now. */
+  #restartFrame() {
+    this.#elapsed = 0;
+    this.#shownAt = performance.now();
+  }
+
   /** How long the frame on screen has shown so far, ms. */
   #shownFor() {
     return this.#elapsed + (this.#playing && this.#timer ? performance.now() - this.#shownAt : 0);
@@ -913,11 +921,13 @@ export class FocusReader extends HTMLElement {
     const anchor = this.#anchor();
     this.#fr.style.setProperty('--anchor', `${anchor}px`);
     const top = first.offsetTop;
+    // reading on (the frame next to the one before, either way) always moves smoothly, however far: a paragraph
+    // is often more than three lines; a jump (a new text, a resize, a seek far away) moves at once
+    const next = Math.abs(this.#i - this.#flowFrame) <= 1;
     // a free scroll (paused) holds until the frame changes or it plays again
     if (this.#i !== this.#flowFrame || this.#playing) this.#free = 0;
     this.#flowFrame = this.#i;
-    // a jump (a new text, a resize, a seek far away) moves at once; reading on moves a line, smoothly
-    const far = this.#flowTop < 0 || Math.abs(top - this.#flowTop) > first.offsetHeight * 3;
+    const far = this.#flowTop < 0 || (!next && Math.abs(top - this.#flowTop) > first.offsetHeight * 3);
     this.#flowTop = top;
     this.#flowBase = Math.round(anchor - top - first.offsetHeight / 2);
     this.#flowAt(far);
@@ -1027,7 +1037,7 @@ export class FocusReader extends HTMLElement {
       this.#i = i;
       this.#started = true;
       this.#done = false;
-      this.#elapsed = 0;
+      this.#restartFrame();
       this.#markFlow();
       this.#stats();
     }
@@ -1154,7 +1164,7 @@ export class FocusReader extends HTMLElement {
     this.#paces[this.#paceKey()] = { wpm: s.wpm, words: s.words, size: s.size };
     if ((this.#byBlock() ? 'paragraph' : String(s.words)) !== before) this.#reframe(word);
     else this.#retime();
-    this.#elapsed = 0;
+    this.#restartFrame();
     if (this.#playing) this.#schedule();
     this.#layout();
     this.#store();
