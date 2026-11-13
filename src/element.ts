@@ -67,6 +67,14 @@ const SCROLL_STEP = 32;
 const GLIDE_DECAY = 0.997;
 /** a wheel's notch as a glide's speed: px of the notch to px/ms, so a notch of 100 px glides about 120 px */
 const WHEEL_GLIDE = 0.0036;
+/** the most one scroll event moves, px: a single huge delta never jumps a paragraph */
+const WHEEL_MAX = 160;
+/** the fastest a glide goes, px/ms, however many notches or however hard a flick */
+const GLIDE_MAX = 2.5;
+/** a large step counts as a wheel's notch only if no other came within this long, ms: a stream is a hand */
+const NOTCH_GAP = 80;
+/** Flow's text, scrolled while paused, eases towards where the scroll points, at most this far a screen frame, px */
+const EASE_MAX = 40;
 
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const coarse = () => matchMedia('(pointer: coarse)').matches;
@@ -408,6 +416,14 @@ export class FocusReader extends HTMLElement {
   #flowFrame = -1;
   /** the glide after a flick or a wheel's notch: its speed in px/ms, and whether it runs */
   #glideV = 0;
+  /** when the last scroll event came, to tell a wheel's notch from a stream */
+  #lastWheel = -Infinity;
+  /** Flow, paused: where a scroll has sent the text, which it eases towards a screen frame at a time */
+  #easeTo: number | null = null;
+  #easeRaf = 0;
+  /** Flow, paused: the frame a scroll has reached, which the reading place follows (#follow) */
+  #scrollTarget: number | null = null;
+  #followRaf = 0;
   #gliding = false;
   #stage: HTMLElement;
   #chunk: HTMLElement;
@@ -942,7 +958,10 @@ export class FocusReader extends HTMLElement {
     // is often more than three lines; a jump (a new text, a resize, a seek far away) moves at once
     const next = Math.abs(this.#i - this.#flowFrame) <= 1;
     // a free scroll (paused) holds until the frame changes or it plays again
-    if (this.#i !== this.#flowFrame || this.#playing) this.#free = 0;
+    if (this.#i !== this.#flowFrame || this.#playing) {
+      this.#free = 0;
+      this.#stopEase();
+    }
     this.#flowFrame = this.#i;
     const far = this.#flowTop < 0 || (!next && Math.abs(top - this.#flowTop) > first.offsetHeight * 3);
     this.#flowTop = top;
@@ -1031,8 +1050,8 @@ export class FocusReader extends HTMLElement {
   }
 
   /** Puts Flow's text where the line being read and the free scroll say. */
-  #flowAt(instant: boolean) {
-    const y = Math.round(this.#flowBase + this.#free);
+  #flowAt(instant: boolean, at?: number) {
+    const y = Math.round(at ?? this.#flowBase + this.#free);
     if (y === this.#flowY && !instant) return;
     this.#text.classList.toggle('instant', instant);
     this.#flowY = y;
@@ -1051,25 +1070,44 @@ export class FocusReader extends HTMLElement {
     if (this.#s.view !== 'flow' || this.#playing || !this.#wordEls.length) return false;
     const anchor = this.#anchor();
     const y = Math.max(anchor - this.#text.offsetHeight, Math.min(anchor, this.#flowY + dy));
-    const i = frameAt(this.#frames, this.#wordAt(anchor - y));
-    if (i !== this.#i) {
-      this.#i = i;
+    this.#flowAt(true, y);
+    // the reading place heads for the frame under the anchor, a frame at a time (#follow)
+    this.#scrollTarget = frameAt(this.#frames, this.#wordAt(anchor - y));
+    // the reading place moves at the next screen frame, never within the event: a step taken here and another
+    // in the frame's own callback would both happen before one paint, and the frame between would never show
+    this.#free = this.#flowY - this.#flowBase;
+    if (!this.#followRaf) this.#followRaf = requestAnimationFrame(this.#follow);
+    return true;
+  }
+
+  /**
+   * The reading place catches up with a scroll: one frame each screen frame (more only when it falls far behind),
+   * so every frame between is the one being read in turn, however far a single scroll event moved the text.
+   * The text stays where the hand put it; only the frame it is measured from changes.
+   */
+  #follow = () => {
+    this.#followRaf = 0;
+    const target = this.#scrollTarget;
+    if (target === null || this.#playing || this.#s.view !== 'flow') return;
+    if (target !== this.#i) {
+      const gap = target - this.#i;
+      // a frame at a time; only a flick far across the text (more than 12 frames behind) catches up faster
+      this.#i += Math.sign(gap) * (Math.abs(gap) > 12 ? Math.floor(Math.abs(gap) / 6) : 1);
       this.#started = true;
       this.#done = false;
       this.#restartFrame();
       this.#markFlow();
       this.#stats();
+      if (this.#byBlock()) this.#paceLine();
     }
-    // the text stays where the hand put it: the offset is now from the new frame's line
-    const first = this.#wordEls[this.#frames[i].start];
-    this.#flowFrame = i;
+    const first = this.#wordEls[this.#frames[this.#i].start];
+    this.#flowFrame = this.#i;
     this.#flowTop = first.offsetTop;
-    this.#flowBase = this.#baseFor(i);
-    this.#free = y - this.#flowBase;
-    this.#flowAt(true);
-    if (this.#byBlock()) this.#paceLine();
-    return true;
-  }
+    this.#flowBase = this.#baseFor(this.#i);
+    this.#free = this.#flowY - this.#flowBase;
+    if (this.#i !== target) this.#followRaf = requestAnimationFrame(this.#follow);
+    else this.#scrollTarget = null;
+  };
 
   /**
    * The word at `y`, in the text's own coordinates, as a scroll goes through it: from the middle of one line to
@@ -1308,6 +1346,7 @@ export class FocusReader extends HTMLElement {
   #gestures(el: HTMLElement) {
     el.addEventListener('pointerdown', (e) => {
       this.#glideV = 0;
+      this.#stopEase();
       if (e.pointerType === 'mouse') return;
       this.#drag = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, t: e.timeStamp, v: 0 };
     });
@@ -1340,8 +1379,10 @@ export class FocusReader extends HTMLElement {
       }
       this.toggle();
     });
-    // a scroll moves as a drag does: down or right is on. A trackpad's own glide arrives as more scroll events;
-    // a mouse wheel's notches (large, or counted in lines) glide here, so a spun wheel runs on too.
+    // a scroll moves as a drag does: down or right is on. A stream of events (a trackpad, its own glide, a fast
+    // swipe; Firefox sends larger and more of them than Chrome) is followed as it comes, never sped up. Only a
+    // notch, counted in lines or pages, or large and on its own, glides here, so a spun wheel runs on too. One
+    // event never moves more than WHEEL_MAX, so no single delta jumps a paragraph.
     el.addEventListener(
       'wheel',
       (e) => {
@@ -1350,8 +1391,14 @@ export class FocusReader extends HTMLElement {
         this.#wake();
         const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
         const on = (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * unit;
-        if (e.deltaMode !== 0 || Math.abs(on) >= 50) this.#glideBy(-on * WHEEL_GLIDE, true);
-        else this.#move(-on);
+        const px = Math.max(-WHEEL_MAX, Math.min(WHEEL_MAX, -on));
+        const gap = e.timeStamp - this.#lastWheel;
+        this.#lastWheel = e.timeStamp;
+        const notch = e.deltaMode !== 0 || (Math.abs(on) >= 50 && gap > NOTCH_GAP);
+        if (notch) return this.#glideBy(px * WHEEL_GLIDE, true);
+        // the hand takes over from a glide
+        this.#glideV = 0;
+        this.#ease(px);
       },
       { passive: false },
     );
@@ -1361,6 +1408,42 @@ export class FocusReader extends HTMLElement {
    * Moves by `px` as a hand would: in Flow while paused, the text itself (the reading place follows); otherwise
    * a frame back or on every SCROLL_STEP px, up or left being on.
    */
+  /**
+   * A scroll event: in Flow while paused, the text eases towards where the scroll points, a screen frame at a
+   * time (at most EASE_MAX), so the highlight passes over every frame on the way, whether the browser sends many
+   * small events (Chrome) or fewer large ones (Firefox). Elsewhere, as #move.
+   */
+  #ease(px: number) {
+    if (this.#s.view !== 'flow' || this.#playing || !this.#wordEls.length) return this.#move(px);
+    const anchor = this.#anchor();
+    const from = this.#easeTo ?? this.#flowY;
+    this.#easeTo = Math.max(anchor - this.#text.offsetHeight, Math.min(anchor, from + px));
+    if (!this.#easeRaf) this.#easeRaf = requestAnimationFrame(this.#easeStep);
+  }
+
+  #easeStep = () => {
+    this.#easeRaf = 0;
+    if (this.#easeTo === null || this.#playing || this.#s.view !== 'flow') return void (this.#easeTo = null);
+    const left = this.#easeTo - this.#flowY;
+    if (Math.abs(left) < 1) return void (this.#easeTo = null);
+    const step = reducedMotion() ? left : Math.sign(left) * Math.min(Math.abs(left) * 0.45 + 1, EASE_MAX);
+    const before = this.#flowY;
+    this.#scrollBy(step);
+    // at an end, the text cannot follow: stop there
+    if (this.#flowY === before) return void (this.#easeTo = null);
+    this.#easeRaf = requestAnimationFrame(this.#easeStep);
+  };
+
+  /** Stops an easing scroll: the reading place moved some other way (a key, Play, a seek, a resize). */
+  #stopEase() {
+    this.#easeTo = null;
+    cancelAnimationFrame(this.#easeRaf);
+    this.#easeRaf = 0;
+    this.#scrollTarget = null;
+    cancelAnimationFrame(this.#followRaf);
+    this.#followRaf = 0;
+  }
+
   #move(px: number) {
     if (this.#scrollBy(px)) return;
     this.#wheel -= px;
@@ -1381,7 +1464,7 @@ export class FocusReader extends HTMLElement {
       if (add) this.#move(v / WHEEL_GLIDE);
       return;
     }
-    this.#glideV = add ? this.#glideV + v : v;
+    this.#glideV = Math.max(-GLIDE_MAX, Math.min(GLIDE_MAX, add ? this.#glideV + v : v));
     if (this.#gliding) return;
     this.#gliding = true;
     let last = performance.now();
