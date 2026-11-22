@@ -53,3 +53,11 @@ Everything comes from custom properties on the element, with system defaults (`C
 ## Functions
 
 `@elchdl/focus-reader/text`: `blocksFromElement`, `blocksFromText`, `parse`, `frames`, `schedule`, `frameAt`, `orp`.
+
+## Tests
+
+- `pnpm test:unit`: the text functions (blocks from plain text, words, frames, timing, `frameAt`, `orp`), with Node's own test runner, in `test/text.test.ts`.
+- `pnpm test:browser`: the element in a browser, with Playwright, on the test pages in `test/fixtures` (served by Vite): keys, clicks, scroll and glide, both views, the paragraph mode, the attributes, where it reads from, `persist`, the dark scheme, reduced motion, and on a phone a tap, a swipe and full screen. Extraction from a page (`blocksFromElement`) is tested there too, on a real DOM.
+- `pnpm test`: both.
+
+Locally the browser tests run in the Chrome installed on the machine, as a desktop window and as a phone, so nothing is downloaded. `FR_BROWSERS=all pnpm test:browser` adds Playwright's Firefox and WebKit, once installed with `pnpm exec playwright install firefox webkit`; CI (`CI=1`) runs all of them, with Playwright's Chromium in place of Chrome.

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>focus-reader: test page</title>
+    <!-- The page the browser tests drive (test/browser). Every query parameter but `src` and `scope` becomes an
+         attribute of the reader: ?modal&persist&view=flow. See reader.ts. -->
+    <style>
+      html { color-scheme: light dark; }
+      body { margin: 0; font-family: system-ui, sans-serif; }
+      main { max-width: 52rem; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+      .tile { height: 600px; border: 1px solid; }
+      .tile focus-reader { height: 100%; min-height: 0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="bar">
+        <button id="open" type="button">Open the reader</button>
+        <input id="field" aria-label="A field of the page" />
+      </div>
+      <div id="scope"><button id="own" type="button">A control of the page's own</button><div class="tile" id="tile"></div></div>
+      <article id="article"></article>
+    </main>
+    <script type="module" src="./reader.ts"></script>
+  </body>
+</html>

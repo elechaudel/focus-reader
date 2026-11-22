@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>focus-reader: text extraction</title>
+    <!-- blocksFromElement on a page: what is read and what is skipped (test/browser/text.spec.ts). -->
+  </head>
+  <body>
+    <article id="body">
+      <h1>The title</h1>
+      <p>A   paragraph,
+        on two lines.</p>
+      <p>With <em>inline</em> <a href="#">markup</a>, a break<br />inside, and an <img alt="image" src="data:," /> image.</p>
+      <p>A footnote marker<sup data-focus-skip>1</sup> skipped.</p>
+      <pre><code>const code = 'skipped';</code></pre>
+      <figure><img alt="" src="data:," /><figcaption>A caption, skipped with its figure.</figcaption></figure>
+      <ul>
+        <li>First item.</li>
+        <li>Second item, with <code>code</code> inline.</li>
+      </ul>
+      <blockquote><p>A quoted paragraph.</p><p>And another.</p></blockquote>
+      <blockquote>A quote without paragraphs.</blockquote>
+      <table><tr><td>A table, skipped.</td></tr></table>
+      <aside>An aside, skipped.</aside>
+      <nav>A navigation, skipped.</nav>
+      <p hidden>Hidden, skipped.</p>
+      <p aria-hidden="true">Hidden from assistive technology, skipped.</p>
+      <div data-focus-skip><p>Marked to skip, with what it holds.</p></div>
+      <section>
+        <h3>A section's heading</h3>
+        <div>A bare div of text.</div>
+        <p>   </p>
+      </section>
+      <dl><dt>Term</dt><dd>Its definition.</dd></dl>
+    </article>
+    <template id="tpl"><h2>In a template</h2><p>Read from its content.</p><video></video></template>
+    <script type="module">
+      import * as text from '../../src/text.ts';
+      window.text = text;
+      document.documentElement.dataset.ready = '';
+    </script>
+  </body>
+</html>
