@@ -1336,6 +1336,9 @@ export class FocusReader extends HTMLElement {
     const word = this.#frames[this.#i]?.start ?? 0;
     const s = this.#s;
     const before = this.#byBlock() ? 'paragraph' : String(s.words);
+    // a size chosen now, not one a view comes back with: that pace fitted when it was left, and the band is still
+    // hidden here when coming back from Flow (measured at no width, every word but one was taken off)
+    const resized = change.size !== undefined;
     const to = this.#paceKey(change.view ?? s.view, change.para ?? s.para);
     if (to !== this.#paceKey()) {
       // each view, and Flow a paragraph at a time, comes back with its own pace
@@ -1343,7 +1346,7 @@ export class FocusReader extends HTMLElement {
       Object.assign(change, { wpm, words, size });
     }
     Object.assign(s, change);
-    if (change.size) {
+    if (resized) {
       // a larger size makes room by taking words off the frame (more words, in turn, step the size down: #fit)
       while (s.view === 'sequence' && s.words > 1 && !this.#fits(s.words, s.size)) s.words--;
     }

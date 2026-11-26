@@ -143,6 +143,28 @@ test.describe('attributes', () => {
     expect([s.view, s.wpm]).toEqual(['Sequence', '150']);
   });
 
+  test('each view keeps its words per frame through a switch to the other and back', async ({ page }) => {
+    await load(page, 'words=3&size=s');
+    await act(page, 'view');
+    await act(page, 'words-');
+    let s = await state(page);
+    expect([s.view, s.words]).toEqual(['Flow', '5']);
+    await act(page, 'view');
+    s = await state(page);
+    expect([s.view, s.words, s.size, s.chunk]).toEqual(['Sequence', '3', 'S', 'How a page']);
+    await act(page, 'view');
+    expect((await state(page)).words).toBe('5');
+  });
+
+  test('a larger size still takes words off a frame that no longer fits', async ({ page }) => {
+    await load(page, 'words=6&size=s');
+    expect((await state(page)).words).toBe('6');
+    for (let i = 0; i < 3; i++) await act(page, 'size+');
+    const s = await state(page);
+    expect(s.size).toBe('XL');
+    expect(Number(s.words)).toBeLessThan(6);
+  });
+
   test('an unknown view, size or align is ignored', async ({ page }) => {
     await load(page, 'view=grid&size=huge&align=right');
     const s = await state(page);
