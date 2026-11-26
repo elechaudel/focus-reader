@@ -19,6 +19,9 @@ export interface Word {
   block: number;
   /** index of the first word of its sentence */
   sentence: number;
+  /** a space before it, from the word before in its block: false inside a run of a language written without
+   * spaces (Chinese, Japanese, Thai…), cut into words by Intl.Segmenter */
+  space: boolean;
 }
 
 export interface Doc {
@@ -37,8 +40,13 @@ export interface Frame {
   weight: number;
 }
 
-const SENTENCE_END = /[.?!…]['"”’)\]]*$/;
-const CLAUSE_END = /[,;:—–]['"”’)\]]*$/;
+// the ends of a sentence and of a clause, in the scripts with spaces and in the ones without (。！？ 、，；：)
+const SENTENCE_END = /[.?!…。！？]['"”’)\]」』）]*$/;
+const CLAUSE_END = /[,;:—–、，；：]['"”’)\]」』）]*$/;
+/** scripts written without spaces between words: a run of them is cut by Intl.Segmenter */
+/** opening brackets and quotes: in a run without spaces, they go with the word after them */
+const OPENING = /^[\p{Ps}\p{Pi}]+$/u;
+const NO_SPACES = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
 const DASH = /^[—–-]$/;
 
 const BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE', 'DD', 'DT']);
@@ -52,14 +60,14 @@ const clean = (s: string) => s.replace(/\s+/g, ' ').trim();
 /**
  * Blocks of text from a part of a page (an article's body, a <template>'s content): paragraphs, headings, list
  * items and quotes, in order. Skips what is not prose to read in a row: code blocks, figures and media, tables,
- * navigation, anything hidden, and anything marked `data-focus-skip`.
+ * navigation, anything hidden, and anything marked `data-focus-reader-skip`.
  */
 export function blocksFromElement(root: ParentNode): Block[] {
   const out: Block[] = [];
   const walk = (node: ParentNode, inQuote: boolean) => {
     for (const el of Array.from(node.children)) {
       const tag = el.tagName.toUpperCase();
-      if (SKIP_TAGS.has(tag) || el.hasAttribute('hidden') || el.hasAttribute('data-focus-skip')) continue;
+      if (SKIP_TAGS.has(tag) || el.hasAttribute('hidden') || el.hasAttribute('data-focus-reader-skip')) continue;
       if (el.getAttribute('aria-hidden') === 'true') continue;
       const hasBlocks = Array.from(el.querySelectorAll('*')).some((c) => BLOCK_TAGS.has(c.tagName.toUpperCase()));
       if (tag === 'BLOCKQUOTE' && hasBlocks) {
@@ -91,7 +99,7 @@ function textOf(el: Element): string {
     if (n.nodeType === 3) s += n.textContent ?? '';
     else if (n.nodeType === 1) {
       const e = n as Element;
-      if (SKIP_TAGS.has(e.tagName.toUpperCase()) || e.hasAttribute('data-focus-skip')) continue;
+      if (SKIP_TAGS.has(e.tagName.toUpperCase()) || e.hasAttribute('data-focus-reader-skip')) continue;
       if (e.tagName === 'BR') s += ' ';
       else s += textOf(e);
     }
@@ -111,9 +119,14 @@ export function blocksFromText(text: string): Block[] {
     .map((p) => (/^#+\s/.test(p) ? { kind: 'heading' as const, text: clean(p.replace(/^#+\s/, '')) } : { kind: 'p' as const, text: clean(p) }));
 }
 
-/** Words, each with its block and the start of its sentence (where "back" goes). */
-export function parse(blocks: Block[]): Doc {
+/**
+ * Words, each with its block and the start of its sentence (where "back" goes). Words are cut at spaces; a run
+ * in a script written without them (Chinese, Japanese, Thai…) is cut further by Intl.Segmenter, for `locale`
+ * (the text's language, if known), its punctuation kept with the word before it.
+ */
+export function parse(blocks: Block[], locale?: string): Doc {
   const words: Word[] = [];
+  let segmenter: Intl.Segmenter | null | undefined;
   blocks.forEach((b, block) => {
     let sentence = words.length;
     for (const raw of b.text.split(' ')) {
@@ -124,11 +137,52 @@ export function parse(blocks: Block[]): Doc {
         last.text += ` ${raw}`;
         continue;
       }
-      words.push({ text: raw, block, sentence });
-      if (SENTENCE_END.test(raw)) sentence = words.length;
+      if (NO_SPACES.test(raw)) segmenter ??= makeSegmenter(locale);
+      const parts = segmenter && NO_SPACES.test(raw) ? segment(segmenter, raw) : [raw];
+      parts.forEach((text, k) => {
+        words.push({ text, block, sentence, space: k === 0 });
+        if (SENTENCE_END.test(text)) sentence = words.length;
+      });
     }
   });
   return { blocks, words };
+}
+
+function makeSegmenter(locale?: string): Intl.Segmenter | null {
+  if (typeof Intl === 'undefined' || !('Segmenter' in Intl)) return null;
+  try {
+    return new Intl.Segmenter(locale, { granularity: 'word' });
+  } catch {
+    return new Intl.Segmenter(undefined, { granularity: 'word' });
+  }
+}
+
+/**
+ * A run without spaces, cut into words. What is not a word stays with a word: an opening bracket or quote with
+ * the word after it, any other punctuation with the word before it.
+ */
+function segment(segmenter: Intl.Segmenter, run: string): string[] {
+  const out: string[] = [];
+  let lead = '';
+  for (const { segment: piece, isWordLike } of segmenter.segment(run)) {
+    if (isWordLike) {
+      out.push(lead + piece);
+      lead = '';
+    } else if (!out.length || OPENING.test(piece)) lead += piece;
+    else out[out.length - 1] += piece;
+  }
+  if (lead) {
+    if (out.length) out[out.length - 1] += lead;
+    else out.push(lead);
+  }
+  return out;
+}
+
+/** Words `a` to `b` (exclusive) as text: a space between two words only where the text had one. */
+export function join(words: Word[], a: number, b: number): string {
+  let s = '';
+  for (let i = a; i < b; i++) s += (i > a && words[i].space ? ' ' : '') + words[i].text;
+  return s;
 }
 
 /** A word's weight: 1 on average, a little more for a long word. */
@@ -172,7 +226,7 @@ export function frames(doc: Doc, perFrame: number, byBlock = false): Frame[] {
     out.push({
       start,
       end,
-      text: words.slice(start, end).map((w) => w.text).join(' '),
+      text: join(words, start, end),
       heading,
       weight: weight + pause,
     });

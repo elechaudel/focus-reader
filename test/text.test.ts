@@ -4,7 +4,7 @@
 // (test/browser/text.spec.ts).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { blocksFromText, frameAt, frames, orp, parse, PAUSES, schedule, type Frame } from '../src/text.ts';
+import { blocksFromText, frameAt, frames, join, orp, parse, PAUSES, schedule, type Frame } from '../src/text.ts';
 
 const TEXT = `# A title here
 
@@ -58,9 +58,43 @@ test('parse: a dash opening a block does not stick to the block before', () => {
   assert.deepEqual(words.map((w) => w.text), ['End.', '—', 'Start']);
 });
 
-test('parse: words split on spaces only (the limit for languages written without them)', () => {
-  const { words } = parse([{ kind: 'p', text: '日本語の文章です。次の文。' }]);
-  assert.equal(words.length, 1);
+test('parse: in a language written with spaces, every word has one before it but the first of a block', () => {
+  const { words } = doc();
+  assert.ok(words.every((w) => w.space));
+});
+
+test('parse: a run without spaces is cut into words by Intl.Segmenter, its punctuation kept with a word', () => {
+  const words = (text: string, locale: string) => parse([{ kind: 'p', text }], locale).words;
+  const ja = words('日本語の文章です。次の文、短い。', 'ja');
+  assert.deepEqual(ja.map((w) => w.text), ['日本語', 'の', '文章', 'です。', '次', 'の', '文、', '短い。']);
+  // no space between them, and 。 ends a sentence as a full stop does
+  assert.deepEqual(ja.map((w) => w.space), [true, false, false, false, false, false, false, false]);
+  assert.deepEqual(ja.map((w) => w.sentence), [0, 0, 0, 0, 4, 4, 4, 4]);
+  assert.deepEqual(words('我喜欢读书。你呢？', 'zh').map((w) => w.text), ['我', '喜欢', '读书。', '你', '呢？']);
+  assert.deepEqual(words('ภาษาไทยไม่มีช่องว่าง', 'th').map((w) => w.text), ['ภาษา', 'ไทย', 'ไม่มี', 'ช่อง', 'ว่าง']);
+  // an opening bracket or quote goes with the word after it
+  assert.deepEqual(words('Tokyo（東京）is big.', 'en').map((w) => [w.text, w.space]), [
+    ['Tokyo', true],
+    ['（東京）', false],
+    ['is', false],
+    ['big.', true],
+  ]);
+  assert.deepEqual(words('「東京」へ行く。', 'ja').map((w) => w.text), ['「東京」', 'へ', '行く。']);
+});
+
+test('join and frames: words put back together with a space only where the text had one', () => {
+  const d = parse([{ kind: 'p', text: '日本語の文章です。次の文、短い。' }], 'ja');
+  assert.equal(join(d.words, 0, d.words.length), '日本語の文章です。次の文、短い。');
+  // three words a frame, cut at the end of a sentence; 、 adds a beat as a comma does
+  const fs = frames(d, 3);
+  assert.deepEqual(spans(fs), [
+    [0, 3, '日本語の文章'],
+    [3, 4, 'です。'],
+    [4, 7, '次の文、'],
+    [7, 8, '短い。'],
+  ]);
+  close(fs[2].weight, ww(1) + ww(1) + ww(1) + PAUSES.clause);
+  assert.equal(join(doc().words, 3, 6), 'One two three,');
 });
 
 test('frames: one word at a time, a heading on its own', () => {

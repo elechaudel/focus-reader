@@ -1,4 +1,4 @@
-# @elchdl/focus-reader
+# focus-reader
 
 `<focus-reader>` shows a text a few words at a time, like subtitles, at a pace you pick. It started as a Lab experiment on elchdl, The Focus Reader (`/lab/the-focus-reader/`), and is kept free of the site so it can become a package of its own: no dependency, no framework, a custom element and a few pure functions.
 
@@ -7,22 +7,28 @@
 ```html
 <button onclick="document.querySelector('focus-reader').open()">Focus</button>
 <focus-reader for="article-body" heading="A visual direction" modal persist></focus-reader>
-<script type="module">import '@elchdl/focus-reader/element';</script>
+<script type="module">import 'focus-reader/element';</script>
 ```
 
-- `for`: id of the element whose text it reads (an article's body, a `<template>`). Without it, a `<template>` inside the element, or else its own content. Paragraphs, headings, list items and quotes are read; code blocks, figures, media, tables and anything with `data-focus-skip` are not.
+- `for`: id of the element whose text it reads (an article's body, a `<template>`). Without it, a `<template>` inside the element, or else its own content. Paragraphs, headings, list items and quotes are read; code blocks, figures, media, tables and anything with `data-focus-reader-skip` are not. Words are cut at spaces, and a run in a language written without them (Chinese, Japanese, Thai…) is cut by `Intl.Segmenter`, in the reader's language.
 - `heading`: the title at the top. `name`: the label before it (default "Focus reader"; empty, no label).
 - `wpm` (100–800), `words` per frame (1–6) and `size` (`s`, `m`, `l`, `xl`): the pace of the view it starts in. Each view keeps its own: Sequence 150 wpm, one word, M; Flow 300 wpm, six words, M. `persist` keeps both.
 - `underline="off"`: in Flow, the words being read only in ink, without the accent's underline (a setting of the panel too).
 - `align` (`left` on a marker, `center` like subtitles, `pivot` on the recognition point as Spritz does).
 - `view`: `sequence` (default), one frame at a time on a band, or `flow`, the whole text with the frame being read marked, moving up a line at a time like song lyrics. In Flow, Words goes on past six to ¶: a whole paragraph at a time, with a pace line in the margin and a pace of its own (250 wpm). It reflects the view shown, and changing it switches.
 - `modal`: hidden until opened. Without it, the reader sits in the page, filling its box, and opens to the full window from its own button.
-- `persist`: remembers the settings in this browser (`localStorage`).
+- `persist`: remembers the settings in this browser (`localStorage`, key `focus-reader.v4`).
+- `labels`: the words the panel shows and says, as JSON, over the English defaults; only the ones given change. The `labels` property does the same from a script (`null` goes back to the attribute's). Every key and its default is in `src/labels.ts` (`LABELS`); `{wpm}`-like marks are filled in, and a pair is `[one, other]`, picked by the plural rules of the language.
+- `lang`: the language it reads in, for numbers, plurals and cutting words; without it, the nearest `lang` above it, else English.
 - Methods: `open()`, `close()`, `play()`, `pause()`, `toggle()`, `reload()`. Events: `focusreaderopen`, `focusreaderclose`, `focusreaderview` (`detail.view`).
+
+```html
+<focus-reader for="article-body" lang="fr" labels='{"play": "Lire", "reading": "Lecture", "wordsPerFrame": ["{n} mot par cadre", "{n} mots par cadre"]}'></focus-reader>
+```
 
 ## Style
 
-Everything comes from custom properties on the element, with system defaults (`Canvas`, `CanvasText`, `system-ui`):
+Everything comes from custom properties on the element, with system defaults (`Canvas`, `CanvasText`, `LinkText` for the accent, `system-ui`, `ui-monospace`):
 
 | Property | |
 |---|---|
@@ -48,11 +54,11 @@ Everything comes from custom properties on the element, with system defaults (`C
 
 - The panel moves the text and the progress by writing a transform or a width on the element itself, never an inherited custom property: a scroll or a frame restyles one element, not every word of the text.
 - Idle, inline or open, it does nothing: no timer, no animation frame. Playing, it works only when a frame changes.
-- To load it on demand (as the Feed's loop does, once it comes near the screen), import `@elchdl/focus-reader/register`: it registers the element and exports nothing, so the bundle needs no module namespace for it.
+- To load it on demand (as the Feed's loop does, once it comes near the screen), import `focus-reader/register`: it registers the element and exports nothing, so the bundle needs no module namespace for it.
 
 ## Functions
 
-`@elchdl/focus-reader/text`: `blocksFromElement`, `blocksFromText`, `parse`, `frames`, `schedule`, `frameAt`, `orp`.
+`focus-reader/text`: `blocksFromElement`, `blocksFromText`, `parse` (with the text's language, for `Intl.Segmenter`), `frames`, `schedule`, `frameAt`, `orp`, `join`.
 
 ## Tests
 

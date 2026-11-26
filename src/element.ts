@@ -14,9 +14,11 @@
 // which Android Chrome grants and Safari on iPhone does not: there the panel covers the window and works
 // upright too.
 //
-// No dependency and no framework: colours, fonts and the texture come from CSS custom properties (see STYLE).
+// No dependency and no framework: colours, fonts and the texture come from CSS custom properties (see STYLE), and
+// every word it shows or says from its labels (labels.ts), in English unless the page gives others.
 
-import { blocksFromElement, blocksFromText, frameAt, frames, orp, parse, schedule, type Doc, type Frame } from './text';
+import { fill, LABELS, mergeLabels, type Labels } from './labels';
+import { blocksFromElement, blocksFromText, frameAt, frames, join, orp, parse, schedule, type Doc, type Frame } from './text';
 
 export type Align = 'left' | 'center' | 'pivot';
 export type Size = 's' | 'm' | 'l' | 'xl';
@@ -34,7 +36,6 @@ const PACES: Record<PaceKey, Pace> = {
 };
 
 const VIEWS: View[] = ['sequence', 'flow'];
-const VIEW_LABEL: Record<View, string> = { sequence: 'Sequence', flow: 'Flow' };
 /** Flow's text size, in px: a base plus a share of the panel's width (it wraps, so nothing has to fit a line) */
 const FLOW_SIZE: Record<Size, [number, number]> = { s: [16, 0.012], m: [18, 0.018], l: [20, 0.026], xl: [22, 0.036] };
 /** where the line being read rests in Flow, as a share of the window's height */
@@ -48,7 +49,7 @@ const SIZES: Size[] = ['s', 'm', 'l', 'xl'];
 const SIZE_FACTOR: Record<Size, number> = { s: 0.04, m: 0.055, l: 0.075, xl: 0.1 };
 const SIZE_MAX = 160;
 const ALIGNS: Align[] = ['left', 'center', 'pivot'];
-const ALIGN_LABEL: Record<Align, string> = { left: 'Left', center: 'Centre', pivot: 'Pivot' };
+const ALIGN_LABEL: Record<Align, 'alignLeft' | 'alignCenter' | 'alignPivot'> = { left: 'alignLeft', center: 'alignCenter', pivot: 'alignPivot' };
 /** where the eye rests on the band, as a share of its width */
 const MARKER: Record<Align, number> = { left: 0.12, center: 0.5, pivot: 0.35 };
 const WPM_MIN = 100;
@@ -78,7 +79,6 @@ const EASE_MAX = 40;
 
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const coarse = () => matchMedia('(pointer: coarse)').matches;
-const fmt = new Intl.NumberFormat('en-GB');
 
 const STYLE = `
 :host {
@@ -90,7 +90,7 @@ const STYLE = `
   --fr-rule: color-mix(in srgb, CanvasText 22%, Canvas);
   /* Flow's words ahead: fainter than faint, so the words read (muted) stand apart in both themes */
   --fr-ahead: color-mix(in srgb, var(--fr-faint) 70%, var(--fr-paper));
-  --fr-accent: #3b64ea;
+  --fr-accent: LinkText;
   --fr-accent-text: var(--fr-accent);
   --fr-on-ink: var(--fr-paper);
   --fr-font-text: system-ui, sans-serif;
@@ -305,6 +305,7 @@ dialog button, dialog .seek { touch-action: manipulation; }
 }
 `;
 
+// Every word in it comes from the labels (#applyLabels): `data-l` for the text, `data-l-label` for aria-label.
 const HTML = `
 <div class="slot"><div class="fr" part="panel">
   <div class="top">
@@ -314,30 +315,29 @@ const HTML = `
       <button type="button" class="label door" data-door></button>
     </div>
     <div class="rule fade"></div>
-    <div class="settings label fade" role="group" aria-label="Settings">
-      <span class="setting"><span>View</span>
+    <div class="settings label fade" role="group" data-l-label="settings">
+      <span class="setting"><span data-l="view"></span>
         <button type="button" class="align" data-act="view"></button></span>
-      <span class="setting"><span id="l-wpm">Speed</span>
-        <button type="button" class="step" data-act="wpm-" aria-label="Slower">−</button>
+      <span class="setting"><span id="l-wpm" data-l="speed"></span>
+        <button type="button" class="step" data-act="wpm-" data-l-label="slower">−</button>
         <span class="value" data-wpm aria-labelledby="l-wpm"></span>
-        <button type="button" class="step" data-act="wpm+" aria-label="Faster">+</button></span>
-      <span class="setting"><span>Words</span>
-        <button type="button" class="step" data-act="words-" aria-label="Fewer words per frame">−</button>
+        <button type="button" class="step" data-act="wpm+" data-l-label="faster">+</button></span>
+      <span class="setting"><span data-l="words"></span>
+        <button type="button" class="step" data-act="words-" data-l-label="fewerWords">−</button>
         <span class="value" data-words></span>
-        <button type="button" class="step" data-act="words+" aria-label="More words per frame">+</button></span>
-      <span class="setting"><span>Size</span>
-        <button type="button" class="step" data-act="size-" aria-label="Smaller text">−</button>
+        <button type="button" class="step" data-act="words+" data-l-label="moreWords">+</button></span>
+      <span class="setting"><span data-l="size"></span>
+        <button type="button" class="step" data-act="size-" data-l-label="smaller">−</button>
         <span class="value" data-size></span>
-        <button type="button" class="step" data-act="size+" aria-label="Larger text">+</button></span>
-      <span class="setting align-setting"><span>Align</span>
+        <button type="button" class="step" data-act="size+" data-l-label="larger">+</button></span>
+      <span class="setting align-setting"><span data-l="align"></span>
         <button type="button" class="align" data-act="align"></button></span>
-      <span class="setting underline-setting"><span>Underline</span>
-        <button type="button" class="align" data-act="underline"></button></span>
+      <span class="setting underline-setting"><span data-l="underline"></span>
+        <button type="button" class="align" data-act="underline" data-l-label="underlineLabel"></button></span>
     </div>
   </div>
   <div class="middle">
-    <div class="band" data-band tabindex="0" role="group" aria-roledescription="reader"
-      aria-label="Reading band. Space to play or pause, left and right arrows to move by frame, up and down arrows for speed, scroll to move by frame.">
+    <div class="band" data-band tabindex="0" role="group" aria-roledescription="reader" data-l-label="band">
       <div class="ruler up" aria-hidden="true"><span class="mark"></span></div>
       <div class="stage" aria-hidden="true"><span class="ghost" data-ghost></span><span class="chunk" data-chunk></span></div>
       <div class="ruler down" aria-hidden="true"><span class="mark"></span></div>
@@ -345,8 +345,7 @@ const HTML = `
     <div class="below">
       <p class="context" data-context></p>
     </div>
-    <div class="flow" data-flow tabindex="0" role="group" aria-roledescription="reader"
-      aria-label="Reading flow. Space to play or pause, left and right arrows to move by frame, up and down arrows for speed.">
+    <div class="flow" data-flow tabindex="0" role="group" aria-roledescription="reader" data-l-label="flowArea">
       <div class="ruler up" aria-hidden="true"></div>
       <div class="window" aria-hidden="true"><span class="mark"></span><div class="text" data-text></div></div>
       <div class="ruler down" aria-hidden="true"></div>
@@ -354,15 +353,15 @@ const HTML = `
   </div>
   <div class="bottom">
     <div class="stats">
-      <div class="stat"><span class="label fade">Rate</span><span class="figure"><span data-rate></span><span class="unit">wpm</span></span></div>
-      <div class="stat"><span class="label fade">Read</span><span class="figure"><span data-read></span><span class="unit" data-total></span></span></div>
-      <div class="stat"><span class="label fade">Left</span><span class="figure"><span data-left></span><span class="unit" data-left-unit></span></span></div>
+      <div class="stat"><span class="label fade" data-l="rate"></span><span class="figure"><span data-rate></span><span class="unit" data-l="wpm"></span></span></div>
+      <div class="stat"><span class="label fade" data-l="read"></span><span class="figure"><span data-read></span><span class="unit" data-total></span></span></div>
+      <div class="stat"><span class="label fade" data-l="remaining"></span><span class="figure"><span data-left></span><span class="unit" data-left-unit></span></span></div>
     </div>
-    <div class="progress-head label fade"><span>Progress</span><span data-pct></span></div>
-    <div class="progress"><input class="seek" type="range" min="0" step="1" data-seek aria-label="Position in the text" /><span class="fill"></span></div>
+    <div class="progress-head label fade"><span data-l="progress"></span><span data-pct></span></div>
+    <div class="progress"><input class="seek" type="range" min="0" step="1" data-seek data-l-label="position" /><span class="fill"></span></div>
     <div class="foot fade">
-      <button type="button" class="label play" data-act="play" aria-pressed="false"><span data-state>Play</span></button>
-      <span class="label keys"><span class="desk-keys"><b>Space</b> play · <b>← →</b> frame · <b>Scroll</b> <span class="seq-only">frame</span><span class="flow-only">text</span> · <b>↑ ↓</b> speed · <b>Esc</b> close</span><span class="touch-keys">Tap to play or pause, swipe for a word</span></span>
+      <button type="button" class="label play" data-act="play" aria-pressed="false"><span data-state></span></button>
+      <span class="label keys"><span class="desk-keys" data-keys></span><span class="touch-keys" data-l="touchKeys"></span></span>
     </div>
   </div>
   <p class="vh" aria-live="polite" data-live></p>
@@ -389,13 +388,20 @@ interface Settings {
  * - `wpm`, `words` (1–6), `size` (s, m, l, xl), `align` (left, center, pivot): where it starts.
  * - `modal`: shown only once opened, for a page that opens it from a button of its own.
  * - `persist`: remember the settings in this browser.
- * - `open` reflects whether the full-window panel is open. Methods: open(), close(), play(), pause(), toggle().
- * Events: `focusreaderopen`, `focusreaderclose`.
+ * - `labels`: the words it shows and says, as JSON (or the `labels` property), over the English defaults.
+ * - `open` reflects whether the full-window panel is open. Methods: open(), close(), play(), pause(), toggle(),
+ *   reload(). Events: `focusreaderopen`, `focusreaderclose`, `focusreaderview`.
  */
 export class FocusReader extends HTMLElement {
-  static observedAttributes = ['heading', 'name', 'for', 'view'];
+  static observedAttributes = ['heading', 'name', 'for', 'view', 'labels', 'lang'];
 
   #root: ShadowRoot;
+  /** the words it shows and says: the defaults, under the `labels` attribute, under the property */
+  #l: Labels = LABELS;
+  #ownLabels: unknown = null;
+  /** numbers and plurals in the reader's language */
+  #fmt = new Intl.NumberFormat('en');
+  #plural = new Intl.PluralRules('en');
   #q = <T extends Element = HTMLElement>(s: string) => this.#root.querySelector<T>(s)!;
   #fr: HTMLElement;
   #slot: HTMLElement;
@@ -504,6 +510,8 @@ export class FocusReader extends HTMLElement {
     // the view reads back as an attribute, for the page to show which one is on
     if (this.getAttribute('view') !== s.view) this.setAttribute('view', s.view);
 
+    this.#readLabels();
+    this.#applyLabels();
     this.#labels();
     this.#load();
     this.#wire();
@@ -531,16 +539,32 @@ export class FocusReader extends HTMLElement {
     if (!this.isConnected) return;
     if (name === 'view') {
       const v = this.getAttribute('view') as View;
-      if (VIEWS.includes(v) && v !== this.#s.view) this.#set({ view: v }, `${VIEW_LABEL[v]} view`);
+      if (VIEWS.includes(v) && v !== this.#s.view) this.#set({ view: v }, this.#t('viewSaid', { view: this.#l[v] }));
       return;
     }
     if (name === 'for') {
       this.#load();
       this.#layout();
+    } else if (name === 'labels' || name === 'lang') {
+      this.#relabel();
+      // the language cuts the words of a text written without spaces
+      if (name === 'lang') this.reload();
     } else this.#labels();
   }
 
   // ——— public API
+
+  /**
+   * The words it shows and says. Set it to an object with the ones to change, over the defaults and the
+   * `labels` attribute (the same, as JSON); `null` goes back to those.
+   */
+  get labels(): Labels {
+    return this.#l;
+  }
+  set labels(v: Partial<Labels> | null) {
+    this.#ownLabels = v;
+    this.#relabel();
+  }
 
   get playing() {
     return this.#playing;
@@ -559,7 +583,7 @@ export class FocusReader extends HTMLElement {
     if (this.#dialog.open) return;
     this.#lastFocus = deepActive();
     this.setAttribute('open', '');
-    this.#dialog.setAttribute('aria-label', this.#title() || 'Focus reader');
+    this.#dialog.setAttribute('aria-label', this.#title() || this.#l.name);
     this.#dialog.append(this.#fr);
     this.#dialog.showModal();
     document.documentElement.style.setProperty('overflow', 'hidden');
@@ -616,7 +640,7 @@ export class FocusReader extends HTMLElement {
     this.#playing = true;
     this.#started = true;
     this.#fr.classList.add('playing');
-    this.#say(`Playing at ${this.#s.wpm} words per minute`);
+    this.#say(this.#t('playing', { wpm: this.#n(this.#s.wpm) }));
     this.#show(false);
     this.#schedule();
     this.#wake(QUIET_AFTER_PLAY);
@@ -629,7 +653,7 @@ export class FocusReader extends HTMLElement {
     this.#stop();
     this.#fr.classList.remove('playing');
     const f = this.#frames[this.#i];
-    this.#say(`Paused, word ${fmt.format(f ? f.end : 0)} of ${fmt.format(this.#doc.words.length)}`);
+    this.#say(this.#t('paused', { word: this.#n(f ? f.end : 0), total: this.#n(this.#doc.words.length) }));
     this.#show(false);
     this.#wake();
   }
@@ -653,7 +677,7 @@ export class FocusReader extends HTMLElement {
       blocks = t ? blocksFromElement(t.content) : this.children.length ? blocksFromElement(this) : blocksFromText(this.textContent ?? '');
     }
     const word = keep ? (this.#frames[this.#i]?.start ?? 0) : 0;
-    this.#doc = parse(blocks);
+    this.#doc = parse(blocks, this.#lang());
     this.#wordEls = [];
     this.#text.textContent = '';
     if (!keep) {
@@ -684,12 +708,81 @@ export class FocusReader extends HTMLElement {
   }
 
   #labels() {
-    this.#q('[data-name]').textContent = this.getAttribute('name') ?? 'Focus reader';
+    this.#q('[data-name]').textContent = this.getAttribute('name') ?? this.#l.name;
     this.#q('[data-title]').textContent = this.#title();
     const door = this.#q('[data-door]');
     const open = this.#dialog.open;
-    door.textContent = open ? 'Close' : 'Full screen';
-    door.setAttribute('aria-label', open ? 'Close the reader' : 'Open the reader full screen');
+    door.textContent = open ? this.#l.close : this.#l.fullScreen;
+    door.setAttribute('aria-label', open ? this.#l.closeLabel : this.#l.fullScreenLabel);
+  }
+
+  // ——— words
+
+  /** The language it reads in: its own `lang`, or the nearest one above it, else English. */
+  #lang() {
+    return this.closest('[lang]')?.getAttribute('lang') || document.documentElement.lang || 'en';
+  }
+
+  /** The labels from the attribute and the property, over the defaults; numbers and plurals in its language. */
+  #readLabels() {
+    let given: unknown = null;
+    const attr = this.getAttribute('labels');
+    if (attr) {
+      try {
+        given = JSON.parse(attr);
+      } catch {
+        console.warn('<focus-reader>: the labels attribute is not JSON; the defaults stay.');
+      }
+    }
+    this.#l = mergeLabels(this.#ownLabels, mergeLabels(given));
+    const lang = this.#lang();
+    try {
+      this.#fmt = new Intl.NumberFormat(lang);
+      this.#plural = new Intl.PluralRules(lang);
+    } catch {
+      this.#fmt = new Intl.NumberFormat('en');
+      this.#plural = new Intl.PluralRules('en');
+    }
+  }
+
+  /** The panel's fixed words, from the labels: `data-l` the text, `data-l-label` the aria-label. */
+  #applyLabels() {
+    const l = this.#l as unknown as Record<string, string>;
+    for (const el of this.#root.querySelectorAll<HTMLElement>('[data-l]')) el.textContent = l[el.dataset.l!];
+    for (const el of this.#root.querySelectorAll<HTMLElement>('[data-l-label]')) el.setAttribute('aria-label', l[el.dataset.lLabel!]);
+    // the keys: each in bold, what it does as plain text after it, in one run (a span per word shapes it apart)
+    const k = (key: string, what: string) => `<b>${esc(l[key])}</b> ${what}`;
+    this.#q('[data-keys]').innerHTML = [
+      k('keySpace', esc(l.keyPlay)),
+      k('keyArrows', esc(l.keyFrame)),
+      k('keyScroll', `<span class="seq-only">${esc(l.keyScrollSequence)}</span><span class="flow-only">${esc(l.keyScrollFlow)}</span>`),
+      k('keyUpDown', esc(l.keySpeed)),
+      k('keyEscape', esc(l.keyClose)),
+    ].join(' · ');
+  }
+
+  /** New labels or a new language: every word again. */
+  #relabel() {
+    this.#readLabels();
+    if (!this.isConnected) return;
+    this.#applyLabels();
+    this.#labels();
+    this.#layout();
+  }
+
+  /** A label, its `{values}` filled in. */
+  #t(key: Exclude<keyof Labels, 'wordsPerFrame' | 'wordsAtATime'>, vars?: Record<string, string | number>) {
+    return fill(this.#l[key], vars);
+  }
+
+  /** One of a pair of labels, by the plural rules of its language. */
+  #count(key: 'wordsPerFrame' | 'wordsAtATime', n: number) {
+    const [one, other] = this.#l[key];
+    return fill(this.#plural.select(n) === 'one' ? one : other, { n: this.#n(n) });
+  }
+
+  #n(n: number) {
+    return this.#fmt.format(n);
   }
 
   // ——— playing
@@ -705,7 +798,7 @@ export class FocusReader extends HTMLElement {
         this.#playing = false;
         this.#done = true;
         this.#fr.classList.remove('playing');
-        this.#say('End of the text');
+        this.#say(this.#l.end);
         this.#show(false);
         this.#wake();
         return;
@@ -836,9 +929,10 @@ export class FocusReader extends HTMLElement {
     chunk.classList.toggle('heading', f.heading);
     const align = this.#s.align;
     if (align === 'pivot') {
-      const words = f.text.split(' ');
       // one word: its recognition point; several: the letter about a third of the way in
-      const at = words.length === 1 ? orp(f.text) : snapLetter(f.text, Math.round(f.text.length * 0.3));
+      // (a word with a dash stuck to it counts as several)
+      const one = f.end - f.start === 1 && !f.text.includes(' ');
+      const at = one ? orp(f.text) : snapLetter(f.text, Math.round(f.text.length * 0.3));
       chunk.innerHTML = `${esc(f.text.slice(0, at))}<span class="pivot">${esc(f.text[at] ?? '')}</span>${esc(f.text.slice(at + 1))}`;
     } else chunk.textContent = f.text;
 
@@ -926,7 +1020,7 @@ export class FocusReader extends HTMLElement {
         p = document.createElement('p');
         if (blocks[block].kind === 'heading') p.className = 'h';
         out.append(p);
-      } else p!.append(' ');
+      } else if (w.space) p!.append(' ');
       const span = document.createElement('span');
       span.className = 'w';
       span.dataset.i = String(i);
@@ -1143,16 +1237,17 @@ export class FocusReader extends HTMLElement {
     const f = this.#frames[this.#i];
     if (!f) return void (this.#context.textContent = '');
     if (!this.#started && f.start === 0) {
-      this.#context.textContent = coarse() ? 'Tap the band to start.' : 'Press Space or click the band to start.';
+      this.#context.textContent = coarse() ? this.#l.startTouch : this.#l.startKeys;
       return;
     }
     const s = words[f.start].sentence;
     let e = f.end;
     while (e < words.length && words[e].sentence === s && words[e].block === words[f.start].block) e++;
-    const part = (a: number, b: number) => esc(words.slice(a, b).map((w) => w.text).join(' '));
+    const part = (a: number, b: number) => esc(join(words, a, b));
     const before = part(s, f.start);
     const after = part(f.end, e);
-    this.#context.innerHTML = `${before}${before ? ' ' : ''}<mark>${part(f.start, f.end)}</mark>${after ? ' ' : ''}${after}`;
+    const gap = (i: number) => (words[i]?.space ? ' ' : '');
+    this.#context.innerHTML = `${before}${before ? gap(f.start) : ''}<mark>${part(f.start, f.end)}</mark>${after ? gap(f.end) : ''}${after}`;
   }
 
   #stats() {
@@ -1163,17 +1258,18 @@ export class FocusReader extends HTMLElement {
     const leftMs = this.#done ? 0 : (this.#after[this.#i] ?? 0);
     const q = (s: string) => this.#q(s);
     q('[data-rate]').textContent = String(this.#s.wpm);
-    q('[data-read]').textContent = fmt.format(read);
-    q('[data-total]').textContent = `/ ${fmt.format(total)}`;
-    const [left, unit] = duration(leftMs);
+    q('[data-read]').textContent = this.#n(read);
+    q('[data-total]').textContent = `/ ${this.#n(total)}`;
+    const [left, hours] = duration(leftMs);
+    const unit = hours ? this.#l.hours : this.#l.minutes;
     q('[data-left]').textContent = left;
     q('[data-left-unit]').textContent = unit;
     const p = total ? read / total : 0;
     q('[data-pct]').textContent = `${Math.round(p * 100)}%`;
     this.#q('.fill').style.width = `calc((100% - 4px) * ${p})`;
     this.#seek.value = String(f ? f.start : 0);
-    this.#seek.setAttribute('aria-valuetext', `Word ${fmt.format(read)} of ${fmt.format(total)}, ${left} ${unit} left`);
-    q('[data-state]').textContent = this.#playing ? 'Reading' : this.#done ? 'Read again' : 'Play';
+    this.#seek.setAttribute('aria-valuetext', this.#t('positionValue', { word: this.#n(read), total: this.#n(total), left, unit }));
+    q('[data-state]').textContent = this.#playing ? this.#l.reading : this.#done ? this.#l.again : this.#l.play;
     q('[data-act="play"]').setAttribute('aria-pressed', String(this.#playing));
   }
 
@@ -1183,20 +1279,20 @@ export class FocusReader extends HTMLElement {
     q('[data-wpm]').textContent = String(s.wpm);
     const para = this.#byBlock();
     q('[data-words]').textContent = para ? '¶' : String(s.words);
-    q('[data-words]').setAttribute('aria-label', para ? 'A paragraph at a time' : `${s.words} ${s.words === 1 ? 'word' : 'words'} at a time`);
+    q('[data-words]').setAttribute('aria-label', para ? this.#l.paragraph : this.#count('wordsAtATime', s.words));
     q('[data-size]').textContent = this.#effSize.toUpperCase();
-    q('[data-act="align"]').textContent = ALIGN_LABEL[s.align];
-    q('[data-act="align"]').setAttribute('aria-label', `Alignment: ${ALIGN_LABEL[s.align]}. Change`);
+    const align = this.#l[ALIGN_LABEL[s.align]];
+    q('[data-act="align"]').textContent = align;
+    q('[data-act="align"]').setAttribute('aria-label', this.#t('alignLabel', { align }));
     q('[data-act="wpm-"]').disabled = s.wpm <= WPM_MIN;
     q('[data-act="wpm+"]').disabled = s.wpm >= WPM_MAX;
     q('[data-act="words-"]').disabled = !para && s.words <= 1;
     // in Flow, past six words comes a whole paragraph
     q('[data-act="words+"]').disabled = s.view === 'flow' ? para : s.words >= WORDS_MAX || !this.#fits(s.words + 1, 's');
-    q('[data-act="view"]').textContent = VIEW_LABEL[s.view];
-    q('[data-act="view"]').setAttribute('aria-label', `View: ${VIEW_LABEL[s.view]}. Change`);
-    q('[data-act="underline"]').textContent = s.underline ? 'On' : 'Off';
+    q('[data-act="view"]').textContent = this.#l[s.view];
+    q('[data-act="view"]').setAttribute('aria-label', this.#t('viewLabel', { view: this.#l[s.view] }));
+    q('[data-act="underline"]').textContent = s.underline ? this.#l.on : this.#l.off;
     q('[data-act="underline"]').setAttribute('aria-pressed', String(s.underline));
-    q('[data-act="underline"]').setAttribute('aria-label', 'Underline the words being read');
     q('[data-act="size-"]').disabled = this.#effSize === 's';
     q('[data-act="size+"]').disabled = this.#effSize === 'xl';
   }
@@ -1242,30 +1338,30 @@ export class FocusReader extends HTMLElement {
       case 'wpm-':
       case 'wpm+': {
         const wpm = clampWpm(s.wpm + (act === 'wpm+' ? WPM_STEP : -WPM_STEP));
-        return this.#set({ wpm }, `${wpm} words per minute`);
+        return this.#set({ wpm }, this.#t('wpmSaid', { wpm: this.#n(wpm) }));
       }
       case 'words-':
       case 'words+': {
-        if (s.view === 'flow' && act === 'words+' && s.words >= WORDS_MAX && !s.para) return this.#set({ para: true }, 'A paragraph at a time');
-        if (s.view === 'flow' && act === 'words-' && s.para) return this.#set({ para: false }, `${this.#paces.flow.words} words at a time`);
+        if (s.view === 'flow' && act === 'words+' && s.words >= WORDS_MAX && !s.para) return this.#set({ para: true }, this.#l.paragraph);
+        if (s.view === 'flow' && act === 'words-' && s.para) return this.#set({ para: false }, this.#count('wordsAtATime', this.#paces.flow.words));
         const words = clampWords(s.words + (act === 'words+' ? 1 : -1));
         // more words per frame: the size shown steps down to fit them (#fit); fewer, and it grows back to the one chosen
-        return this.#set({ words }, `${words} ${words === 1 ? 'word' : 'words'} per frame`);
+        return this.#set({ words }, this.#count('wordsPerFrame', words));
       }
       case 'size-':
       case 'size+': {
         const size = SIZES[Math.max(0, Math.min(SIZES.length - 1, i + (act === 'size+' ? 1 : -1)))];
-        return this.#set({ size }, `Size ${size.toUpperCase()}`);
+        return this.#set({ size }, this.#t('sizeSaid', { size: size.toUpperCase() }));
       }
       case 'view': {
         const view = VIEWS[(VIEWS.indexOf(s.view) + 1) % VIEWS.length];
-        return this.#set({ view }, `${VIEW_LABEL[view]} view`);
+        return this.#set({ view }, this.#t('viewSaid', { view: this.#l[view] }));
       }
       case 'underline':
-        return this.#set({ underline: !s.underline }, s.underline ? 'Underline off' : 'Underline on');
+        return this.#set({ underline: !s.underline }, s.underline ? this.#l.underlineOff : this.#l.underlineOn);
       case 'align': {
         const align = ALIGNS[(ALIGNS.indexOf(s.align) + 1) % ALIGNS.length];
-        return this.#set({ align }, `Aligned ${ALIGN_LABEL[align].toLowerCase()}`);
+        return this.#set({ align }, this.#t('alignSaid', { align: this.#l[ALIGN_LABEL[align]].toLocaleLowerCase(this.#lang()) }));
       }
     }
   }
@@ -1584,11 +1680,11 @@ function snapLetter(s: string, i: number) {
   return Math.min(i, s.length - 1);
 }
 
-/** "6:12" min, or "1:02" h past an hour. */
-function duration(ms: number): [string, string] {
+/** "6:12" (minutes), or "1:02" and true (hours) past an hour. */
+function duration(ms: number): [string, boolean] {
   const s = Math.max(0, Math.round(ms / 1000));
-  if (s >= 3600) return [`${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}`, 'h'];
-  return [`${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`, 'min'];
+  if (s >= 3600) return [`${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}`, true];
+  return [`${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`, false];
 }
 
 /** The focused element, through shadow roots. */

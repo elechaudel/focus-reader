@@ -1,5 +1,5 @@
 {
-  "name": "@elchdl/focus-reader",
+  "name": "focus-reader",
   "private": true,
   "type": "module",
   "description": "<focus-reader>: a text read a few words at a time, like subtitles, in a panel with its pace, size and progress. No dependency, no framework.",

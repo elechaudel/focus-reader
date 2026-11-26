@@ -1,6 +1,7 @@
 // The test page's reader. Every query parameter becomes an attribute of <focus-reader>, except:
 // - `src`: where it reads from. `for` (default): the article on the page, through `for="article"`; `template`:
-//   a <template> inside it; `short`: its own content, three sentences; `none`: no text at all.
+//   a <template> inside it; `short`: its own content, three sentences; `ja`: its own content, two sentences in
+//   Japanese (with lang=ja); `none`: no text at all.
 // - `scope`: the block holding the reader and a control of the page's own is marked data-focus-reader-scope.
 // The events it sends are kept in window.events, in order.
 import { ARTICLE } from './text';
@@ -17,6 +18,7 @@ if (!reader.hasAttribute('heading')) reader.setAttribute('heading', 'A text to t
 if (src === 'for') reader.setAttribute('for', 'article');
 else if (src === 'template') reader.innerHTML = `<template>${ARTICLE}</template>`;
 else if (src === 'short') reader.textContent = 'One two three. Four five six.\n\nSeven eight nine.';
+else if (src === 'ja') reader.textContent = '日本語の文章です。次の文、短い。';
 if (params.has('scope')) document.getElementById('scope')!.setAttribute('data-focus-reader-scope', '');
 
 const events: [string, unknown][] = [];
