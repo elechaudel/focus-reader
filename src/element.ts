@@ -17,8 +17,8 @@
 // No dependency and no framework: colours, fonts and the texture come from CSS custom properties (see STYLE), and
 // every word it shows or says from its labels (labels.ts), in English unless the page gives others.
 
-import { fill, LABELS, mergeLabels, type Labels } from './labels';
-import { blocksFromElement, blocksFromText, frameAt, frames, join, orp, parse, schedule, type Doc, type Frame } from './text';
+import { fill, LABELS, mergeLabels, type Labels } from './labels.ts';
+import { blocksFromElement, blocksFromText, frameAt, frames, join, orp, parse, schedule, type Doc, type Frame } from './text.ts';
 
 export type Align = 'left' | 'center' | 'pivot';
 export type Size = 's' | 'm' | 'l' | 'xl';
@@ -389,6 +389,7 @@ interface Settings {
  * - `modal`: shown only once opened, for a page that opens it from a button of its own.
  * - `persist`: remember the settings in this browser.
  * - `labels`: the words it shows and says, as JSON (or the `labels` property), over the English defaults.
+ * - `defaults`: where each view starts, as JSON (see #defaults), under the attributes above.
  * - `open` reflects whether the full-window panel is open. Methods: open(), close(), play(), pause(), toggle(),
  *   reload(). Events: `focusreaderopen`, `focusreaderclose`, `focusreaderview`.
  */
@@ -497,6 +498,8 @@ export class FocusReader extends HTMLElement {
   connectedCallback() {
     const a = (n: string) => this.getAttribute(n);
     const s = this.#s;
+    // `defaults` first, each view's pace from a site's settings; the attributes after it, for this reader
+    this.#defaults();
     // wpm, words and size set the pace of the view it starts in; the other keeps its own
     if (VIEWS.includes(a('view') as View)) s.view = a('view') as View;
     if (ALIGNS.includes(a('align') as Align)) s.align = a('align') as Align;
@@ -714,6 +717,36 @@ export class FocusReader extends HTMLElement {
     const open = this.#dialog.open;
     door.textContent = open ? this.#l.close : this.#l.fullScreen;
     door.setAttribute('aria-label', open ? this.#l.closeLabel : this.#l.fullScreenLabel);
+  }
+
+  /**
+   * The `defaults` attribute, as JSON: where each view starts, as a site sets it for all its readers (the Astro
+   * integration writes it). `{ view, sequence: { wpm, words, size, align }, flow: { wpm, words, size, underline },
+   * paragraph: { wpm, size } }`, every part optional; anything else is ignored.
+   */
+  #defaults() {
+    const attr = this.getAttribute('defaults');
+    if (!attr) return;
+    let d: Record<string, unknown>;
+    try {
+      d = JSON.parse(attr);
+    } catch {
+      console.warn('<focus-reader>: the defaults attribute is not JSON; it is ignored.');
+      return;
+    }
+    if (!d || typeof d !== 'object') return;
+    const s = this.#s;
+    if (VIEWS.includes(d.view as View)) s.view = d.view as View;
+    for (const key of [...VIEWS, 'paragraph'] as PaceKey[]) {
+      const p = d[key] as Partial<Pace & { align: Align; underline: boolean }> | undefined;
+      if (!p || typeof p !== 'object') continue;
+      const pace = this.#paces[key];
+      if (typeof p.wpm === 'number') pace.wpm = clampWpm(p.wpm);
+      if (typeof p.words === 'number' && key !== 'paragraph') pace.words = clampWords(p.words);
+      if (SIZES.includes(p.size as Size)) pace.size = p.size as Size;
+      if (key === 'sequence' && ALIGNS.includes(p.align as Align)) s.align = p.align as Align;
+      if (key === 'flow' && typeof p.underline === 'boolean') s.underline = p.underline;
+    }
   }
 
   // ——— words

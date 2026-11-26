@@ -19,6 +19,7 @@
   },
   "include": [
     "src",
+    "astro",
     "test",
     "playwright.config.ts"
   ]

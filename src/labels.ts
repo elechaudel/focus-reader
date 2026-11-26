@@ -83,6 +83,9 @@ export interface Labels {
   alignLabel: string;
   underlineOn: string;
   underlineOff: string;
+  /** the Astro component's button that opens the reader, and the line a reader in the page shows without JavaScript */
+  open: string;
+  noScript: string;
 }
 
 export const LABELS: Labels = {
@@ -154,6 +157,8 @@ export const LABELS: Labels = {
   alignLabel: 'Alignment: {align}. Change',
   underlineOn: 'Underline on',
   underlineOff: 'Underline off',
+  open: 'Focus reader',
+  noScript: 'The focus reader needs JavaScript.',
 };
 
 /** `{key}` in `s` replaced by `vars[key]`. */

@@ -109,6 +109,40 @@ test.describe('attributes', () => {
     expect([s.view, s.wpm, s.words]).toEqual(['Sequence', '150', '1']);
   });
 
+  test('defaults, as JSON: each view\'s pace, the alignment, the underline; the attributes over it', async ({ page }) => {
+    const d = {
+      sequence: { wpm: 200, words: 2, size: 's', align: 'pivot' },
+      flow: { wpm: 350, words: 4, underline: false },
+      paragraph: { wpm: 225 },
+    };
+    const json = encodeURIComponent(JSON.stringify(d));
+    await load(page, `defaults=${json}`);
+    let s = await state(page);
+    expect([s.view, s.wpm, s.words, s.size, s.align]).toEqual(['Sequence', '200', '2', 'S', 'Pivot']);
+    await act(page, 'view');
+    s = await state(page);
+    expect([s.view, s.wpm, s.words]).toEqual(['Flow', '350', '4']);
+    expect(await page.evaluate(() => document.querySelector('focus-reader')!.shadowRoot!.querySelector('.fr')!.classList.contains('no-underline'))).toBe(true);
+    await act(page, 'words+');
+    await act(page, 'words+');
+    await act(page, 'words+');
+    s = await state(page);
+    expect([s.words, s.wpm]).toEqual(['¶', '225']);
+    // the view it opens in
+    await load(page, `defaults=${encodeURIComponent(JSON.stringify({ ...d, view: 'flow' }))}`);
+    expect((await state(page)).view).toBe('Flow');
+    // an attribute wins over defaults for the view it starts in
+    await load(page, `wpm=500&defaults=${json}`);
+    s = await state(page);
+    expect([s.view, s.wpm, s.words]).toEqual(['Sequence', '500', '2']);
+  });
+
+  test('defaults that are not JSON are ignored', async ({ page }) => {
+    await load(page, 'defaults=nope');
+    const s = await state(page);
+    expect([s.view, s.wpm]).toEqual(['Sequence', '150']);
+  });
+
   test('an unknown view, size or align is ignored', async ({ page }) => {
     await load(page, 'view=grid&size=huge&align=right');
     const s = await state(page);

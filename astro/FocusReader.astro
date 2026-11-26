@@ -1,0 +1,76 @@
+---
+// <FocusReader>: a <focus-reader> with the integration's settings, labels and theme. Around an article, it reads
+// the article (which stays in the page as it is); or it reads the element `for` names. By default the reader is
+// hidden until opened, from a button the component adds, which shows only once the script runs: without
+// JavaScript, the article reads as it is and nothing else shows. `inline` sets the reader in the page instead,
+// filling its box; without JavaScript it shows one line saying so.
+import config from './config.ts';
+import { nextId } from './ids.ts';
+import type { View } from '../src/element.ts';
+import 'virtual:focus-reader/theme.css';
+
+interface Props {
+  /** id of the element whose text it reads; without it, what the component wraps */
+  for?: string;
+  /** the title at the top of the panel */
+  heading?: string;
+  /** the label before the title (empty: none) */
+  name?: string;
+  /** in the page, filling its box, rather than hidden until opened */
+  inline?: boolean;
+  /** the opening button's text, or false for none (a page that opens it itself, with open()) */
+  button?: string | false;
+  /** the view it opens in, over the integration's */
+  view?: View;
+  /** the language it reads in, if not the page's */
+  lang?: string;
+  /** remember the settings in this browser, over the integration's */
+  persist?: boolean;
+  /** the reader's id (to open it from a script); by default one of its own */
+  id?: string;
+  class?: string;
+}
+
+const { for: target, heading, name, inline = false, button, view, lang, persist = config.persist, id, class: className } = Astro.props;
+const wraps = Astro.slots.has('default');
+const n = nextId(Astro.request);
+const textId = target ?? `focus-reader-text-${n}`;
+const readerId = id ?? `focus-reader-${n}`;
+const label = button === false ? null : (button ?? config.open);
+// on a custom element Astro writes false as "false": a flag is there, empty, or not at all
+const flag = (on: boolean) => (on ? '' : undefined);
+---
+
+{
+  wraps && (
+    <div id={textId} class="focus-reader-text">
+      <slot />
+    </div>
+  )
+}
+{
+  label && !inline && (
+    <button type="button" class="focus-reader-open" data-focus-reader-open={readerId} hidden>
+      {label}
+    </button>
+  )
+}
+<focus-reader
+  id={readerId}
+  class={className}
+  for={textId}
+  heading={heading}
+  name={name}
+  modal={flag(!inline)}
+  view={view}
+  lang={lang}
+  persist={flag(persist)}
+  defaults={config.defaults}
+  labels={config.labels}
+>
+  {inline && <p class="focus-reader-noscript">{config.noScript}</p>}
+</focus-reader>
+
+<script>
+  import './client.ts';
+</script>

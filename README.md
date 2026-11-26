@@ -19,12 +19,59 @@
 - `modal`: hidden until opened. Without it, the reader sits in the page, filling its box, and opens to the full window from its own button.
 - `persist`: remembers the settings in this browser (`localStorage`, key `focus-reader.v4`).
 - `labels`: the words the panel shows and says, as JSON, over the English defaults; only the ones given change. The `labels` property does the same from a script (`null` goes back to the attribute's). Every key and its default is in `src/labels.ts` (`LABELS`); `{wpm}`-like marks are filled in, and a pair is `[one, other]`, picked by the plural rules of the language.
+- `defaults`: where each view starts, as JSON, for a site that sets it once for all its readers (the Astro integration writes it): `{"view": "flow", "sequence": {"wpm": 200, "words": 1, "size": "m", "align": "left"}, "flow": {"wpm": 300, "words": 6, "size": "m", "underline": true}, "paragraph": {"wpm": 250}}`, every part optional. The attributes above win over it for the view it starts in, and what `persist` kept wins over both.
 - `lang`: the language it reads in, for numbers, plurals and cutting words; without it, the nearest `lang` above it, else English.
 - Methods: `open()`, `close()`, `play()`, `pause()`, `toggle()`, `reload()`. Events: `focusreaderopen`, `focusreaderclose`, `focusreaderview` (`detail.view`).
 
 ```html
 <focus-reader for="article-body" lang="fr" labels='{"play": "Lire", "reading": "Lecture", "wordsPerFrame": ["{n} mot par cadre", "{n} mots par cadre"]}'></focus-reader>
 ```
+
+## Astro
+
+An integration and a component, `focus-reader/astro` and `focus-reader/astro/FocusReader.astro` (Astro 7).
+
+```js
+// astro.config.mjs
+import { defineConfig } from 'astro/config';
+import focusReader from 'focus-reader/astro';
+
+export default defineConfig({
+  integrations: [
+    focusReader({
+      view: 'sequence', // the view it opens in
+      sequence: { wpm: 150, words: 1, size: 'm', align: 'left' },
+      flow: { wpm: 300, words: 6, size: 'm', underline: true },
+      paragraph: { wpm: 250 }, // Flow, a paragraph at a time
+      persist: true, // remember each reader's settings in the browser (default)
+      labels: { play: 'Lire', open: 'Lire en mode focus' /* … see src/labels.ts */ },
+      theme: {
+        light: { paper: '#f3f2ee', ink: '#141514', muted: '#5f5e59', faint: '#a5a39c', rule: '#d3d1ca', accent: '#3b64ea' },
+        dark: { paper: '#141514', ink: '#f3f2ee' /* … */ },
+        fonts: { text: 'Inter, system-ui, sans-serif', label: 'ui-monospace, monospace', figure: 'ui-monospace, monospace' },
+        // for a site with its own light/dark switch; without them, dark follows the system
+        darkSelector: '[data-theme="dark"]',
+        lightSelector: '[data-theme="light"]',
+      },
+    }),
+  ],
+});
+```
+
+```astro
+---
+import FocusReader from 'focus-reader/astro/FocusReader.astro';
+---
+<FocusReader heading={title}>
+  <article><Content /></article>
+</FocusReader>
+```
+
+- Around an article, it reads the article, which stays in the page as it is; or it reads the element `for` names. It adds a button that opens the reader (its text is the `open` label, or `button="…"`; `button={false}` for none, to open it from a script with `open()`).
+- `inline`: the reader sits in the page, filling its box, instead of opening over it. Its size is the page's to set, and as it comes from another component, globally: `.tile :global(focus-reader) { height: 100%; }`.
+- Also `heading`, `name`, `view`, `lang`, `persist`, `id` and `class`.
+- Without JavaScript, the article reads as it is and the button does not show; a reader in the page shows one line saying it needs JavaScript (the `noScript` label).
+- The theme only sets the `--fr-*` properties below, so a site's own CSS can still change any of them. Colours and fonts for now; loading the fonts stays with the site. A `<focus-reader>` written by hand gets the theme with `import 'virtual:focus-reader/theme.css'`.
 
 ## Style
 

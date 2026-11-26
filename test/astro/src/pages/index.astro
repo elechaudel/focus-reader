@@ -1,0 +1,32 @@
+---
+// Two readers on one page: one around an article, opened from its button; one in the page, reading a template.
+import FocusReader from '../../../../astro/FocusReader.astro';
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>focus-reader: Astro test site</title>
+    <style>
+      .tile { height: 560px; }
+      /* the reader comes from the component: a page styles it globally */
+      .tile :global(focus-reader) { height: 100%; min-height: 0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <FocusReader heading="An article">
+        <article>
+          <h1>An article</h1>
+          <p>It stays in the page as it is, and the reader reads it.</p>
+          <p>A second paragraph, to have more than one.</p>
+        </article>
+      </FocusReader>
+      <template id="other"><p>A text kept in a template, read in place.</p></template>
+      <div class="tile">
+        <FocusReader for="other" heading="In place" inline />
+      </div>
+    </main>
+  </body>
+</html>
