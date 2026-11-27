@@ -1,0 +1,25 @@
+---
+// Every label and its English default, from the package's own list (src/labels.ts), so the page cannot fall
+// behind it.
+import { LABELS } from '../../../src/labels.ts';
+
+const rows = Object.entries(LABELS);
+---
+
+<h2 id="every-label">Every label</h2>
+<p>The {rows.length} keys and their English defaults, read from <code>LABELS</code> when this page is built.</p>
+<table>
+  <thead>
+    <tr><th>Key</th><th>Default</th></tr>
+  </thead>
+  <tbody>
+    {
+      rows.map(([key, value]) => (
+        <tr>
+          <td><code>{key}</code></td>
+          <td>{Array.isArray(value) ? value.map((v, i) => <>{i > 0 && <br />}{v}</>) : value}</td>
+        </tr>
+      ))
+    }
+  </tbody>
+</table>

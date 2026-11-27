@@ -7,4 +7,5 @@ playwright-report/
 test/astro/dist/
 test/astro/.astro/
 .DS_Store
-demo-dist/
+site/dist/
+site/.astro/

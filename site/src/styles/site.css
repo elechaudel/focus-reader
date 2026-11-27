@@ -1,0 +1,209 @@
+/* The site's own styles, over elchdl's tokens and base (tokens.css and base.css, copied by `pnpm sync:tokens`).
+   The accent is citron, The Focus Reader's own in elchdl's Lab. */
+
+:root {
+  --accent: var(--color-citron);
+  --accent-text: var(--color-text-citron);
+  --page-x: clamp(16px, 5vw, 80px);
+  --header-h: 56px;
+}
+
+/* Every reader on the site: the grain the page has, laid over the panel once open (the theme itself comes from
+   the integration, astro.config.mjs). */
+focus-reader {
+  --fr-texture: var(--grain-light);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) focus-reader {
+    --fr-texture: var(--grain-dark);
+    --fr-texture-opacity: 0.12;
+  }
+}
+:root[data-theme='dark'] focus-reader {
+  --fr-texture: var(--grain-dark);
+  --fr-texture-opacity: 0.12;
+}
+
+.type-label,
+.type-label-sm {
+  font-family: var(--type-label-family);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line-height);
+  letter-spacing: var(--type-label-tracking);
+}
+.type-label-sm {
+  font-size: var(--type-label-sm-size);
+  letter-spacing: normal;
+}
+
+.column {
+  width: 100%;
+  max-width: 76rem;
+  margin-inline: auto;
+  padding-inline: var(--page-x);
+}
+
+/* Buttons: square-cornered rectangles in the mono label. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 8px 14px;
+  border: var(--spacing-hairline) solid var(--color-ink);
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-ink);
+  font-family: var(--type-label-family);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line-height);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn:hover {
+  background: var(--color-paper-deep);
+  color: var(--color-ink);
+}
+.btn.primary,
+.btn[aria-pressed='true'],
+.btn[aria-selected='true'] {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+.btn.done {
+  background: var(--color-anis);
+  border-color: var(--color-anis);
+  color: var(--color-on-accent-ink);
+}
+/* Buttons side by side share their hairlines. */
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+}
+.segmented .btn + .btn {
+  margin-left: -1px;
+}
+
+/* A reader in the page: a tile with an ink hairline, the reader filling it. */
+.tile {
+  position: relative;
+  height: 480px;
+  border: var(--spacing-hairline) solid var(--color-ink);
+  background: var(--color-paper);
+}
+.tile focus-reader {
+  height: 100%;
+  min-height: 0;
+}
+.focus-reader-noscript {
+  padding: var(--spacing-lg);
+  color: var(--color-text-muted);
+}
+
+/* Code: on the dark panel in both themes. */
+pre.astro-code,
+pre.code {
+  --code-pad-x: var(--spacing-lg);
+  margin: 0;
+  padding: var(--spacing-md) 0;
+  background: var(--color-panel);
+  color: var(--color-on-panel);
+  font-family: var(--type-label-family);
+  font-size: var(--type-caption-size);
+  line-height: 1.6;
+  overflow-x: auto;
+  scrollbar-color: var(--color-on-panel-faint) transparent;
+}
+pre.code {
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+pre code {
+  font-family: inherit;
+}
+
+/* Reading text: the documentation, and the paragraphs of the landing. */
+.prose {
+  min-width: 0;
+  max-width: var(--measure, 42rem);
+  font-size: var(--type-lead-size);
+  line-height: var(--type-lead-line-height);
+  color: var(--color-text-strong);
+}
+.prose > * + * {
+  margin-top: 1em;
+}
+.prose :is(h2, h3) {
+  font-family: var(--type-headline-sm-family);
+  font-size: var(--type-headline-md-size);
+  line-height: 1;
+  margin-top: 1.5em;
+  scroll-margin-top: calc(var(--header-h) + var(--spacing-lg));
+}
+.prose h3 {
+  font-size: var(--type-headline-sm-size);
+  margin-top: 1.6em;
+}
+.prose :is(h2, h3) + * {
+  margin-top: 0.75em;
+}
+.prose :is(ul, ol) {
+  padding-left: 1.2em;
+}
+.prose li + li {
+  margin-top: 0.4em;
+}
+.prose blockquote {
+  padding-left: var(--spacing-md);
+  border-left: var(--spacing-hairline) solid var(--color-ink);
+}
+.prose pre {
+  margin-block: 1.4em;
+}
+.prose :not(pre) > code {
+  padding: 0.1em 0.3em;
+  background: var(--color-paper-deep);
+  font-family: var(--type-label-family);
+  font-size: 0.875em;
+  overflow-wrap: anywhere;
+}
+.prose .tile {
+  margin-block: 1.4em;
+}
+.prose table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: var(--type-body-sm-size);
+  line-height: var(--type-body-sm-line-height);
+}
+.prose :is(th, td) {
+  padding: 8px 16px 8px 0;
+  border-bottom: var(--spacing-hairline) solid var(--color-rule);
+  text-align: left;
+  vertical-align: top;
+}
+.prose th {
+  border-bottom-color: var(--color-ink);
+  font-family: var(--type-label-family);
+  font-size: var(--type-label-size);
+  font-weight: 400;
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.prose td:first-child {
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .prose td:first-child {
+    white-space: normal;
+  }
+}
+
+/* `hidden` wins over any display set above. */
+[hidden] {
+  display: none !important;
+}

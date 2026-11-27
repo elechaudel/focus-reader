@@ -1,0 +1,18 @@
+---
+import { render } from 'astro:content';
+import Docs from '../../layouts/Docs.astro';
+import LabelsTable from '../../components/LabelsTable.astro';
+import { docPages } from '../../lib/docs';
+
+export async function getStaticPaths() {
+  return (await docPages()).map((page) => ({ params: { slug: page.id }, props: { page } }));
+}
+
+const { page } = Astro.props;
+const { Content } = await render(page);
+---
+
+<Docs page={page}>
+  <Content />
+  {page.id === 'labels' && <LabelsTable />}
+</Docs>

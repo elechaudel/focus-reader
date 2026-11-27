@@ -1,0 +1,83 @@
+---
+// The install command, one tab per way to get the package, each with its Copy button. Without JavaScript the
+// three show one under the other, without the tabs.
+const ways = [
+  { id: 'npm', label: 'npm', code: 'npm install focus-reader' },
+  { id: 'pnpm', label: 'pnpm', code: 'pnpm add focus-reader' },
+  { id: 'cdn', label: 'CDN', code: '<script type="module" src="https://cdn.jsdelivr.net/npm/focus-reader/dist/src/register.js"></script>' },
+];
+---
+
+<div class="install">
+  <div class="tabs segmented" role="tablist" aria-label="Install with" hidden>
+    {
+      ways.map((w, i) => (
+        <button type="button" class="btn" role="tab" id={`install-tab-${w.id}`} aria-controls={`install-${w.id}`} aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1}>
+          {w.label}
+        </button>
+      ))
+    }
+  </div>
+  {
+    ways.map((w) => (
+      <div class="way" id={`install-${w.id}`} role="tabpanel" aria-labelledby={`install-tab-${w.id}`}>
+        <pre class="code"><code>{w.code}</code></pre>
+        <button type="button" class="btn copy" data-copy={w.code}>Copy</button>
+      </div>
+    ))
+  }
+</div>
+
+<script>
+  for (const box of document.querySelectorAll<HTMLElement>('.install')) {
+    const tabs = [...box.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const show = (tab: HTMLButtonElement) => {
+      for (const t of tabs) {
+        const on = t === tab;
+        t.setAttribute('aria-selected', String(on));
+        t.tabIndex = on ? 0 : -1;
+        document.getElementById(t.getAttribute('aria-controls')!)!.hidden = !on;
+      }
+    };
+    box.querySelector<HTMLElement>('.tabs')!.hidden = false;
+    show(tabs[0]);
+    tabs.forEach((t, i) => {
+      t.addEventListener('click', () => show(t));
+      t.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+        const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+        show(next);
+        next.focus();
+      });
+    });
+  }
+</script>
+
+<style>
+  .install {
+    max-width: 34rem;
+  }
+  .way {
+    display: flex;
+    align-items: stretch;
+    margin-top: -1px;
+    border: var(--spacing-hairline) solid var(--color-ink);
+    background: var(--color-panel);
+  }
+  .way + .way {
+    margin-top: var(--spacing-sm);
+  }
+  .way pre {
+    flex: 1;
+    min-width: 0;
+  }
+  .copy {
+    border: 0;
+    border-left: var(--spacing-hairline) solid var(--color-rule-dark);
+    color: var(--color-on-panel);
+  }
+  .copy:hover {
+    background: var(--color-rule-dark);
+    color: var(--color-on-panel);
+  }
+</style>

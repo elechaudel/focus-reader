@@ -50,9 +50,17 @@ Once 0.1.0 is on npm, elchdl uses it like any other package:
 3. Update `packages/README.md` and the line on the code in `DESIGN.md`'s Focus Reader section, which name `packages/focus-reader`.
 4. `pnpm check && pnpm build`, then compare the Lab page and the Feed's loop with the site before the switch: the site imports the same paths (`focus-reader`, `focus-reader/astro`, `focus-reader/astro/FocusReader.astro`, `virtual:focus-reader/theme.css`), now from `dist/`.
 
+## The site
+
+The site (`site/`: landing, documentation, playground) is served by Netlify at focus-reader.elchdl.com, as elchdl is at elchdl.com. To set it up, once:
+
+1. On Netlify, add a new site from the GitHub repository `elechaudel/focus-reader`. The build comes from `netlify.toml` (`pnpm site:build`, published from `site/dist`); nothing to fill in.
+2. In the site's domain settings, add the custom domain `focus-reader.elchdl.com`. If elchdl.com's DNS is Netlify's, it adds the record itself; otherwise add a `CNAME` for `focus-reader` pointing to the site's `*.netlify.app` name.
+
+From then on every push to `main` deploys it, and a pull request gets a preview. The README and `homepage` in `package.json` link to it, so set it up before the release that carries them.
+
 ## Still to decide
 
-- Where the demo is hosted: `pnpm demo:build` writes it to `demo-dist/`, a static folder (GitHub Pages, Netlify).
 - Dependabot, for npm and GitHub Actions.
 - Conventional Commits: Changesets does not need them, the changelog comes from the changesets.
 - A scope on npm: `focus-reader` is unscoped; `@elechaudel/` exists already, an organisation only matters for several maintainers.
