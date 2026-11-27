@@ -1,7 +1,6 @@
 {
   "name": "focus-reader",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "description": "<focus-reader>: a text read a few words at a time, like subtitles, in a panel with its pace, size and progress. No dependency, no framework; an Astro integration and component too.",
   "keywords": [
