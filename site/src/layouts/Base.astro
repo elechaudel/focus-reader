@@ -7,6 +7,7 @@ import '../styles/tokens.css';
 import '../styles/base.css';
 import '../styles/site.css';
 import 'virtual:focus-reader/theme.css';
+import pkg from '../../../package.json';
 import ThemeToggle from '../components/ThemeToggle.astro';
 import { GITHUB, LAB, NPM, url } from '../lib/url';
 
@@ -64,10 +65,15 @@ const nav = [
             <span class="mark" aria-hidden="true"></span>
             <span class="name">{NAME}</span>
           </a>
-          <nav aria-label="Sections">
+          <a href={`${NPM}/v/${pkg.version}`} class="version type-label" title="The version on npm" target="_blank" rel="noopener">v{pkg.version}</a>
+          <!-- On phones the sections fold into a menu under the header, as on elchdl. -->
+          <button type="button" class="menu type-label-sm" aria-expanded="false" aria-controls="sections">
+            Menu<span class="chevron" aria-hidden="true">›</span>
+          </button>
+          <nav id="sections" aria-label="Sections">
             {nav.map((n) => <a href={n.href} aria-current={path.startsWith(n.href) ? 'page' : undefined}>{n.label}</a>)}
-            <a href={GITHUB} class="out">GitHub<span aria-hidden="true"> ↗</span></a>
-            <a href={NPM} class="out npm">npm<span aria-hidden="true"> ↗</span></a>
+            <a href={GITHUB} class="out" target="_blank" rel="noopener">GitHub<span aria-hidden="true"> ↗</span></a>
+            <a href={NPM} class="out npm" target="_blank" rel="noopener">npm<span aria-hidden="true"> ↗</span></a>
           </nav>
           <ThemeToggle />
         </div>
@@ -78,7 +84,7 @@ const nav = [
       <footer class="foot">
         <div class="column">
           <p class="type-label">
-            MIT licence · Started as a Lab experiment on <a href={LAB}>elchdl</a>
+            MIT licence · Started as a Lab experiment on <a href={LAB} target="_blank" rel="noopener">elchdl</a>
           </p>
         </div>
       </footer>
@@ -88,6 +94,33 @@ const nav = [
       import '../../../src/register.ts';
       import { bindCopy } from '../lib/clipboard';
       bindCopy();
+
+      // The menu: on phones it opens the sections under the header, and closes on Escape, a click or a focus
+      // elsewhere, or once the window is wide enough to show them in the header.
+      const top = document.querySelector<HTMLElement>('header.top');
+      const menu = top?.querySelector<HTMLButtonElement>('.menu');
+      if (top && menu) {
+        const phone = matchMedia('(max-width: 640px)');
+        const open = (on: boolean, back = false) => {
+          top.toggleAttribute('data-open', on);
+          menu.setAttribute('aria-expanded', String(on));
+          if (back) menu.focus();
+        };
+        const isOpen = () => top.hasAttribute('data-open');
+        menu.addEventListener('click', () => open(!isOpen()));
+        addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && isOpen()) open(false, true);
+        });
+        addEventListener('pointerdown', (e) => {
+          if (isOpen() && !top.contains(e.target as Node)) open(false);
+        });
+        top.addEventListener('focusout', (e) => {
+          if (isOpen() && e.relatedTarget && !top.contains(e.relatedTarget as Node)) open(false);
+        });
+        phone.addEventListener('change', () => open(false));
+        // a page kept for Back comes back with its menu closed
+        addEventListener('pagehide', () => open(false));
+      }
     </script>
   </body>
 </html>
@@ -120,9 +153,23 @@ const nav = [
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    margin-right: auto;
     color: var(--color-ink);
     text-decoration: none;
+  }
+  /* the version, beside the name: the header's left group ends with it */
+  .version {
+    margin-right: auto;
+    margin-left: calc(var(--spacing-sm) - var(--spacing-lg));
+    padding-top: 3px;
+    color: var(--color-text-muted);
+    text-decoration: none;
+  }
+  .version:hover {
+    color: var(--color-ink);
+  }
+  /* only on phones, where it holds the sections */
+  .menu {
+    display: none;
   }
   /* The mark: four cells, as elchdl's logo, in the reader's citron. */
   .mark {
@@ -168,21 +215,81 @@ const nav = [
   }
 
   @media (max-width: 640px) {
-    .bar,
-    nav {
+    .bar {
       gap: var(--spacing-md);
     }
-    .npm {
+    .version {
+      margin-left: calc(var(--spacing-sm) - var(--spacing-md));
+    }
+    /* Menu in mono capitals, a chevron after it, turned down, up when open */
+    .menu {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 32px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--color-ink);
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .chevron {
+      display: inline-block;
+      font-size: 15px;
+      line-height: 1;
+      rotate: 90deg;
+    }
+    .menu[aria-expanded='true'] .chevron {
+      rotate: -90deg;
+    }
+    /* The sections, just under the header's hairline and across the window: one row each, on hairlines */
+    nav {
       display: none;
+      position: absolute;
+      top: calc(100% + var(--spacing-hairline));
+      left: 0;
+      right: 0;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0;
+      padding-inline: var(--page-x);
+      border-bottom: var(--spacing-hairline) solid var(--color-ink);
+      background: var(--color-paper);
+    }
+    .top[data-open] nav {
+      display: flex;
+    }
+    nav a {
+      display: flex;
+      align-items: center;
+      height: 48px;
+      padding-block: 0;
+      color: var(--color-ink);
+    }
+    nav a[aria-current='page'] {
+      box-shadow: none;
+    }
+    nav a[aria-current='page']::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      margin-right: 10px;
+      background: var(--accent);
+    }
+    nav a + a {
+      border-top: var(--spacing-hairline) solid var(--color-rule);
     }
   }
-  @media (max-width: 420px) {
-    .name {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      overflow: hidden;
-      clip-path: inset(50%);
+  @media (max-width: 640px) and (hover: hover) {
+    .menu:hover {
+      color: var(--color-text-cobalt);
+    }
+  }
+  @media (max-width: 640px) and (prefers-reduced-motion: no-preference) {
+    .chevron {
+      transition: rotate 0.2s ease;
     }
   }
 </style>

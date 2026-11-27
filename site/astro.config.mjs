@@ -2,7 +2,24 @@
 // from the sources beside it. Netlify serves it at focus-reader.elchdl.com (netlify.toml, which sets SITE_URL, its
 // address); SITE_BASE is the path it sits under, for a host that puts it in a folder (`/` by default).
 import { defineConfig } from 'astro/config';
+import { satteri } from '@astrojs/markdown-satteri';
 import focusReader from '../astro/index.ts';
+
+/**
+ * Links to other sites open in a new tab, in the documentation's Markdown as in the pages (where the templates
+ * write it themselves). Astro's Markdown runs on Sätteri, so this is a Sätteri hast plugin, as on elchdl.
+ */
+const externalLinks = {
+  name: 'external-links',
+  element: {
+    filter: ['a'],
+    visit(node, ctx) {
+      if (!/^https?:\/\//i.test(node.properties?.href ?? '')) return;
+      ctx.setProperty(node, 'target', '_blank');
+      ctx.setProperty(node, 'rel', ['noopener']);
+    },
+  },
+};
 
 export default defineConfig({
   site: process.env.SITE_URL,
@@ -30,6 +47,7 @@ export default defineConfig({
     }),
   ],
   markdown: {
+    processor: satteri({ hastPlugins: [externalLinks] }),
     // code takes its colours from the tokens (base.css, .astro-code)
     shikiConfig: { theme: 'css-variables' },
   },

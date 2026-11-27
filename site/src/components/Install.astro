@@ -40,6 +40,7 @@ const ways = [
       }
     };
     box.querySelector<HTMLElement>('.tabs')!.hidden = false;
+    box.classList.add('tabbed');
     show(tabs[0]);
     tabs.forEach((t, i) => {
       t.addEventListener('click', () => show(t));
@@ -57,27 +58,27 @@ const ways = [
   .install {
     max-width: 34rem;
   }
+  /* the command on the page's own paper, in an ink hairline, in both themes: no dark panel here */
   .way {
     display: flex;
     align-items: stretch;
     margin-top: -1px;
     border: var(--spacing-hairline) solid var(--color-ink);
-    background: var(--color-panel);
+    background: var(--color-surface);
   }
-  .way + .way {
+  /* without the tabs (no JavaScript), the three show one under the other */
+  .install:not(.tabbed) .way + .way {
     margin-top: var(--spacing-sm);
   }
   .way pre {
     flex: 1;
     min-width: 0;
+    background: none;
+    color: var(--color-ink);
+    scrollbar-color: var(--color-text-faint) transparent;
   }
   .copy {
     border: 0;
-    border-left: var(--spacing-hairline) solid var(--color-rule-dark);
-    color: var(--color-on-panel);
-  }
-  .copy:hover {
-    background: var(--color-rule-dark);
-    color: var(--color-on-panel);
+    border-left: var(--spacing-hairline) solid var(--color-ink);
   }
 </style>

@@ -65,7 +65,7 @@ const n = (k: number) => String(k + 1).padStart(2, '0');
         }
       </nav>
       <p class="edit type-label">
-        <a href={`${GITHUB}/edit/main/site/src/content/docs/${page.id}.md`}>Edit this page on GitHub ↗</a>
+        <a href={`${GITHUB}/edit/main/site/src/content/docs/${page.id}.md`} target="_blank" rel="noopener">Edit this page on GitHub ↗</a>
       </p>
     </article>
   </div>
@@ -115,9 +115,9 @@ const n = (k: number) => String(k + 1).padStart(2, '0');
   }
   li a {
     display: flex;
-    align-items: baseline;
-    gap: 12px;
-    padding-block: 9px;
+    align-items: center;
+    gap: 10px;
+    padding-block: 7px;
     border-bottom: var(--spacing-hairline) solid var(--color-rule);
     font-size: var(--type-body-sm-size);
     line-height: var(--type-body-sm-line-height);
@@ -128,12 +128,18 @@ const n = (k: number) => String(k + 1).padStart(2, '0');
   li a[aria-current='page'] {
     color: var(--color-ink);
   }
+  /* each number in a square cell; the page being read has its cell filled in */
   .n {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    letter-spacing: 0;
     color: var(--color-text-faint);
   }
   li a[aria-current='page'] .n {
-    padding-inline: 3px;
-    margin-inline: -3px;
     background: var(--accent);
     color: var(--color-on-accent-ink);
   }

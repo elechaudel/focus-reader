@@ -1,11 +1,10 @@
 ---
 // The landing: what it is and how to get it, with a reader in the page to try at once.
 import { Code } from 'astro:components';
-import pkg from '../../../package.json';
 import FocusReader from '../../../astro/FocusReader.astro';
 import Base from '../layouts/Base.astro';
 import Install from '../components/Install.astro';
-import { GITHUB, LAB, NPM, url } from '../lib/url';
+import { GITHUB, NPM, url } from '../lib/url';
 
 const points = [
   {
@@ -36,35 +35,11 @@ import FocusReader from 'focus-reader/astro/FocusReader.astro';
 <FocusReader heading={title}>
   <article><Content /></article>
 </FocusReader>`;
-
-const french = JSON.stringify({
-  name: 'Lecteur',
-  view: 'Vue',
-  speed: 'Vitesse',
-  words: 'Mots',
-  size: 'Taille',
-  underline: 'Souligné',
-  on: 'Oui',
-  off: 'Non',
-  rate: 'Débit',
-  wpm: 'mots/min',
-  read: 'Lus',
-  remaining: 'Reste',
-  progress: 'Progression',
-  play: 'Lire',
-  reading: 'Lecture',
-  again: 'Relire',
-  fullScreen: 'Plein écran',
-  close: 'Fermer',
-  touchKeys: 'Touchez pour lire ou mettre en pause, glissez pour un mot',
-  wordsAtATime: ['{n} mot à la fois', '{n} mots à la fois'],
-});
 ---
 
 <Base>
   <section class="hero column">
     <div class="pitch">
-      <p class="type-label kind"><span class="cell" aria-hidden="true"></span>Custom element · v{pkg.version}</p>
       <h1>A text, a few words at a time.</h1>
       <p class="lede">
         <code>&lt;focus-reader&gt;</code> shows a text like subtitles, at a pace you pick, in a panel with its size and progress. It reads the article already
@@ -77,7 +52,6 @@ const french = JSON.stringify({
       </p>
     </div>
     <div class="stage">
-      <p class="type-label tile-label">Live · press Space, or click the band</p>
       <div class="tile">
         <FocusReader for="pitch" heading="focus-reader" inline />
       </div>
@@ -120,7 +94,6 @@ const french = JSON.stringify({
 
   <section class="column split">
     <div class="prose">
-      <p class="type-label kind">On your page</p>
       <h2>Three lines of HTML</h2>
       <p>
         Give the reader the id of the text to read and a way to open it. With <code>modal</code> it stays hidden until then; without it, it sits in the page
@@ -140,41 +113,8 @@ const french = JSON.stringify({
     </div>
   </section>
 
-  <section class="column split flip">
-    <div class="prose">
-      <p class="type-label kind">Flow, in French</p>
-      <h2>It fits the page, and speaks its language</h2>
-      <p>
-        The same element in its other view, reading a text of its own in French, with French labels. Numbers, plurals and the cutting of words follow the
-        reader's <code>lang</code>; a text written without spaces (Chinese, Japanese, Thai…) is cut by <code>Intl.Segmenter</code>.
-      </p>
-      <p>
-        Colours, fonts and a texture come from a dozen <code>--fr-*</code> custom properties. Here they are this site's own.
-      </p>
-      <p>
-        <a href={url('docs/theming/')}>Theming →</a><br />
-        <a href={url('docs/labels/')}>Labels and languages →</a>
-      </p>
-    </div>
-    <div class="tile">
-      <focus-reader view="flow" lang="fr" heading="Un texte en français" labels={french}>
-        <template>
-          <h2>Lire autrement</h2>
-          <p>
-            Un texte peut se lire de plusieurs façons. Sur le papier, l'œil suit une ligne, saute à la suivante, revient en arrière quand il a perdu le fil,
-            et personne ne le remarque.
-          </p>
-          <p>
-            Ici, le texte avance seul, au rythme choisi. Les mots déjà lus s'estompent, ceux qui restent attendent, et la ligne en cours reste toujours au
-            même endroit.
-          </p>
-          <p>Une virgule retient le regard un instant, la fin d'une phrase un peu plus, et le débit affiché reste celui que vous obtenez.</p>
-        </template>
-      </focus-reader>
-    </div>
-  </section>
-
-  <section class="column next">
+  <section class="column">
+    <nav class="next" aria-label="Where to go next">
     <a class="door" href={url('docs/')}>
       <span class="type-label">Documentation</span>
       <span class="title">How everything works →</span>
@@ -183,21 +123,15 @@ const french = JSON.stringify({
       <span class="type-label">Playground</span>
       <span class="title">Read your own text →</span>
     </a>
-    <a class="door" href={GITHUB}>
+    <a class="door" href={GITHUB} target="_blank" rel="noopener">
       <span class="type-label">Source</span>
       <span class="title">GitHub ↗</span>
     </a>
-    <a class="door" href={NPM}>
+    <a class="door" href={NPM} target="_blank" rel="noopener">
       <span class="type-label">Package</span>
       <span class="title">npm ↗</span>
     </a>
-  </section>
-
-  <section class="column origin">
-    <p class="prose">
-      It started as an experiment in the Lab of elchdl, <a href={LAB}>The Focus Reader</a>: a way to read the long pieces of a site that takes the whole
-      screen and nothing else.
-    </p>
+    </nav>
   </section>
 </Base>
 
@@ -205,35 +139,28 @@ const french = JSON.stringify({
   section {
     margin-top: var(--spacing-section);
   }
-  .kind {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--color-text-muted);
-    text-transform: uppercase;
-  }
-  .cell {
-    width: 10px;
-    height: 10px;
-    background: var(--accent);
-  }
 
+  /* the pitch centred, the reader under it across the column */
   .hero {
-    display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-    gap: var(--spacing-xl);
-    align-items: end;
     margin-top: var(--spacing-page-y);
   }
+  .pitch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .stage {
+    margin-top: var(--spacing-section);
+  }
   h1 {
-    margin-top: var(--spacing-md);
     font-family: var(--type-display-family);
     font-size: clamp(3.25rem, 6.2vw, var(--type-display-size));
     line-height: var(--type-display-line-height);
     letter-spacing: var(--type-display-tracking);
   }
   .lede {
-    max-width: 32rem;
+    max-width: 38rem;
     margin-top: var(--spacing-lg);
     font-size: 1.25rem;
     line-height: 1.45;
@@ -249,18 +176,16 @@ const french = JSON.stringify({
     background: var(--color-paper-deep);
   }
   .pitch :global(.install) {
-    margin-top: var(--spacing-lg);
+    width: 100%;
+    margin-top: var(--spacing-xl);
+    text-align: left;
   }
   .actions {
     display: flex;
     flex-wrap: wrap;
+    justify-content: center;
     gap: var(--spacing-sm);
     margin-top: var(--spacing-lg);
-  }
-  .tile-label {
-    margin-bottom: var(--spacing-sm);
-    color: var(--color-text-muted);
-    text-transform: uppercase;
   }
   .stage .tile {
     height: 520px;
@@ -284,7 +209,7 @@ const french = JSON.stringify({
     border-left: var(--spacing-hairline) solid var(--color-ink);
   }
   .points .n {
-    color: var(--accent-text);
+    color: var(--color-text-muted);
   }
   .points h2 {
     margin-block: var(--spacing-md) var(--spacing-sm);
@@ -302,7 +227,7 @@ const french = JSON.stringify({
     border-top: var(--spacing-hairline) solid var(--color-ink);
   }
   .split .prose h2 {
-    margin-top: var(--spacing-md);
+    margin-top: 0;
     font-size: var(--type-headline-lg-size);
   }
   .codes .type-label {
@@ -343,16 +268,15 @@ const french = JSON.stringify({
     background: var(--color-paper-deep);
     color: var(--color-ink);
   }
-  .origin {
-    color: var(--color-text-muted);
-  }
 
   @media (max-width: 960px) {
-    .hero,
     .split {
       grid-template-columns: minmax(0, 1fr);
     }
     .hero {
+      margin-top: var(--spacing-xl);
+    }
+    .stage {
       margin-top: var(--spacing-xl);
     }
     .points,
