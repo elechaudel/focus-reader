@@ -1,0 +1,227 @@
+---
+// A page of the documentation: the list of pages on the left (a folded list above the text on narrow screens),
+// the text, then the pages before and after.
+import type { CollectionEntry } from 'astro:content';
+import Base from './Base.astro';
+import { docPages } from '../lib/docs';
+import { GITHUB, url } from '../lib/url';
+
+interface Props {
+  page: CollectionEntry<'docs'>;
+}
+
+const { page } = Astro.props;
+const pages = await docPages();
+const i = pages.findIndex((p) => p.id === page.id);
+const prev = pages[i - 1];
+const next = pages[i + 1];
+const n = (k: number) => String(k + 1).padStart(2, '0');
+---
+
+<Base title={page.data.title} description={page.data.description}>
+  <div class="column docs">
+    <aside>
+      <details class="contents" open>
+        <summary class="type-label">Documentation<span class="count"> · {n(i)} / {n(pages.length - 1)}</span></summary>
+        <ol>
+          {
+            pages.map((p, k) => (
+              <li>
+                <a href={url(`docs/${p.id}/`)} aria-current={p.id === page.id ? 'page' : undefined}>
+                  <span class="n type-label">{n(k)}</span>
+                  {p.data.title}
+                </a>
+              </li>
+            ))
+          }
+        </ol>
+      </details>
+    </aside>
+    <article>
+      <p class="type-label kind">Docs · {n(i)}</p>
+      <h1>{page.data.title}</h1>
+      <p class="standfirst">{page.data.description}</p>
+      <div class="prose">
+        <slot />
+      </div>
+      <nav class="around" aria-label="Other pages">
+        {
+          prev ? (
+            <a href={url(`docs/${prev.id}/`)}>
+              <span class="type-label">← Before</span>
+              <span class="title">{prev.data.title}</span>
+            </a>
+          ) : (
+            <span />
+          )
+        }
+        {
+          next && (
+            <a href={url(`docs/${next.id}/`)} class="after">
+              <span class="type-label">Next →</span>
+              <span class="title">{next.data.title}</span>
+            </a>
+          )
+        }
+      </nav>
+      <p class="edit type-label">
+        <a href={`${GITHUB}/edit/main/site/src/content/docs/${page.id}.md`} target="_blank" rel="noopener">Edit this page on GitHub ↗</a>
+      </p>
+    </article>
+  </div>
+</Base>
+
+<script>
+  // On narrow screens the list of pages starts folded, above the text.
+  const contents = document.querySelector<HTMLDetailsElement>('.contents');
+  const narrow = matchMedia('(max-width: 960px)');
+  const fold = () => {
+    if (contents) contents.open = !narrow.matches;
+  };
+  fold();
+  narrow.addEventListener('change', fold);
+</script>
+
+<style>
+  .docs {
+    display: grid;
+    grid-template-columns: 15rem minmax(0, 1fr);
+    gap: var(--spacing-section);
+    margin-top: var(--spacing-xl);
+  }
+  aside {
+    position: sticky;
+    top: calc(var(--header-h) + var(--spacing-xl));
+    align-self: start;
+  }
+  summary {
+    padding-bottom: var(--spacing-sm);
+    border-bottom: var(--spacing-hairline) solid var(--color-ink);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    list-style: none;
+    cursor: default;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  .count {
+    display: none;
+  }
+  ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  li a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-block: 7px;
+    border-bottom: var(--spacing-hairline) solid var(--color-rule);
+    font-size: var(--type-body-sm-size);
+    line-height: var(--type-body-sm-line-height);
+    text-decoration: none;
+    color: var(--color-text-muted);
+  }
+  li a:hover,
+  li a[aria-current='page'] {
+    color: var(--color-ink);
+  }
+  /* each number in a square cell; the page being read has its cell filled in */
+  .n {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    letter-spacing: 0;
+    color: var(--color-text-faint);
+  }
+  li a[aria-current='page'] .n {
+    background: var(--accent);
+    color: var(--color-on-accent-ink);
+  }
+
+  .kind {
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+  }
+  h1 {
+    margin-top: var(--spacing-sm);
+    font-family: var(--type-display-family);
+    font-size: clamp(2.75rem, 5vw, 4rem);
+    line-height: var(--type-display-line-height);
+  }
+  .standfirst {
+    max-width: 42rem;
+    margin-block: var(--spacing-md) var(--spacing-xl);
+    font-size: 1.25rem;
+    line-height: 1.45;
+    color: var(--color-text);
+  }
+  .prose {
+    --measure: 46rem;
+  }
+  .around {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    max-width: 46rem;
+    margin-top: var(--spacing-section);
+    border: var(--spacing-hairline) solid var(--color-ink);
+  }
+  .around a {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) var(--spacing-lg);
+    text-decoration: none;
+    color: var(--color-ink);
+  }
+  .around a:hover {
+    background: var(--color-paper-deep);
+  }
+  .around .after {
+    border-left: var(--spacing-hairline) solid var(--color-ink);
+    text-align: right;
+  }
+  .around .type-label {
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+  }
+  .around .title {
+    font-family: var(--type-headline-sm-family);
+    font-size: var(--type-headline-sm-size);
+    line-height: 1;
+  }
+  .edit {
+    margin-top: var(--spacing-lg);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 960px) {
+    .docs {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--spacing-lg);
+      margin-top: var(--spacing-lg);
+    }
+    aside {
+      position: static;
+    }
+    summary {
+      cursor: pointer;
+    }
+    summary::after {
+      content: '+';
+      float: right;
+    }
+    details[open] summary::after {
+      content: '−';
+    }
+    .count {
+      display: inline;
+    }
+  }
+</style>

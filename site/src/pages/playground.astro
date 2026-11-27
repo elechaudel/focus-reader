@@ -1,0 +1,703 @@
+---
+// The playground: a reader on a text of your own, with what it starts from (view, pace, language, where it sits)
+// and its theme set from the page, and the code that gives the same reader. Everything stays in the browser.
+import Base from '../layouts/Base.astro';
+import { url } from '../lib/url';
+
+const samples = [
+  {
+    id: 'en',
+    label: 'English',
+    lang: 'en',
+    text: `# Reading, a few words at a time
+
+Most of what we read on a screen asks the eye to do two jobs at once: follow the words, and find its way back to the line after every glance away. The focus reader takes the second job off its hands.
+
+It shows the text a few words at a time, in the same place, at a pace you choose. A comma makes a frame stay a beat longer, the end of a sentence two, and the whole is scaled so the rate shown is the rate you get.
+
+Reading back matters more than reading fast. Pause, and the sentence shows under the band; the arrows, a scroll or a swipe go a frame back or on.`,
+  },
+  {
+    id: 'fr',
+    label: 'Français',
+    lang: 'fr',
+    text: `# Lire autrement
+
+Un texte peut se lire de plusieurs façons. Sur le papier, l'œil suit une ligne, saute à la suivante, revient en arrière quand il a perdu le fil, et personne ne le remarque.
+
+Ici, le texte avance seul, au rythme choisi. Les mots déjà lus s'estompent, ceux qui restent attendent, et la ligne en cours reste toujours au même endroit.
+
+Une virgule retient le regard un instant, la fin d'une phrase un peu plus, et le débit affiché reste celui que vous obtenez.`,
+  },
+  {
+    id: 'ja',
+    label: '日本語',
+    lang: 'ja',
+    text: `# 吾輩は猫である
+
+吾輩は猫である。名前はまだ無い。
+
+どこで生れたかとんと見当がつかぬ。何でも薄暗いじめじめした所でニャーニャー泣いていた事だけは記憶している。吾輩はここで始めて人間というものを見た。`,
+  },
+];
+const langs = [
+  ['en', 'English'],
+  ['fr', 'French'],
+  ['de', 'German'],
+  ['es', 'Spanish'],
+  ['it', 'Italian'],
+  ['pt', 'Portuguese'],
+  ['ja', 'Japanese'],
+  ['zh', 'Chinese'],
+  ['th', 'Thai'],
+];
+const colors = [
+  ['paper', 'Paper'],
+  ['ink', 'Ink'],
+  ['muted', 'Muted'],
+  ['accent', 'Accent'],
+];
+const fonts = [
+  ['', 'The site’s (Figtree)'],
+  ['system-ui, sans-serif', 'System sans'],
+  ['Georgia, serif', 'Serif (Georgia)'],
+  ['ui-monospace, monospace', 'Monospace'],
+];
+---
+
+<Base title="Playground" description="Read your own text in the focus reader, set how it starts and how it looks, and copy the code.">
+  <div class="column head">
+    <p class="type-label kind">Playground</p>
+    <h1>Read your own text</h1>
+    <p class="standfirst">
+      Paste a text, set how the reader starts and how it looks, and copy the code that gives the same one. Nothing leaves this page: the text stays in your
+      browser.
+    </p>
+  </div>
+
+  <div class="column bench" id="playground" data-samples={JSON.stringify(samples)}>
+    <div class="stage">
+      <div class="tile" id="tile">
+        <p class="waiting">The playground needs JavaScript.</p>
+      </div>
+      <p class="note">
+        The controls set where the reader <em>starts</em>; its own panel takes over from there. Space plays and pauses, the arrows go a frame back or on.
+      </p>
+    </div>
+
+    <form class="controls" id="controls" autocomplete="off">
+      <fieldset>
+        <legend class="type-label">Text</legend>
+        <div class="segmented" id="samples">
+          {
+            samples.map((s) => (
+              <button type="button" class="btn" data-sample={s.id} lang={s.lang}>
+                {s.label}
+              </button>
+            ))
+          }
+        </div>
+        <label class="visually-hidden" for="text">The text to read</label>
+        <textarea id="text" rows="9" spellcheck="false" placeholder="Paste a text here. A blank line separates paragraphs; a line starting with # is a heading."></textarea>
+        <div class="row">
+          <label for="lang">Language</label>
+          <select id="lang" name="lang">
+            {langs.map(([v, l]) => <option value={v}>{l}</option>)}
+          </select>
+        </div>
+        <div class="row">
+          <label for="heading">Heading</label>
+          <input id="heading" name="heading" type="text" value="My text" />
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend class="type-label">Where it starts</legend>
+        <div class="row">
+          <span class="lbl" id="l-view">View</span>
+          <div class="segmented" role="group" aria-labelledby="l-view" data-choice="view">
+            <button type="button" class="btn" data-value="sequence">Sequence</button>
+            <button type="button" class="btn" data-value="flow">Flow</button>
+          </div>
+        </div>
+        <div class="row">
+          <label for="wpm">Speed</label>
+          <input id="wpm" name="wpm" type="range" min="100" max="800" step="25" />
+          <output for="wpm" id="wpm-out"></output>
+        </div>
+        <div class="row">
+          <label for="words">Words</label>
+          <input id="words" name="words" type="range" min="1" max="6" step="1" />
+          <output for="words" id="words-out"></output>
+        </div>
+        <div class="row">
+          <span class="lbl" id="l-size">Size</span>
+          <div class="segmented" role="group" aria-labelledby="l-size" data-choice="size">
+            <button type="button" class="btn" data-value="s">S</button>
+            <button type="button" class="btn" data-value="m">M</button>
+            <button type="button" class="btn" data-value="l">L</button>
+            <button type="button" class="btn" data-value="xl">XL</button>
+          </div>
+        </div>
+        <div class="row" data-only="sequence">
+          <span class="lbl" id="l-align">Align</span>
+          <div class="segmented" role="group" aria-labelledby="l-align" data-choice="align">
+            <button type="button" class="btn" data-value="left">Left</button>
+            <button type="button" class="btn" data-value="center">Centre</button>
+            <button type="button" class="btn" data-value="pivot">Pivot</button>
+          </div>
+        </div>
+        <div class="row" data-only="flow">
+          <span class="lbl" id="l-underline">Underline</span>
+          <div class="segmented" role="group" aria-labelledby="l-underline" data-choice="underline">
+            <button type="button" class="btn" data-value="on">On</button>
+            <button type="button" class="btn" data-value="off">Off</button>
+          </div>
+        </div>
+        <div class="row">
+          <span class="lbl" id="l-place">Placement</span>
+          <div class="segmented" role="group" aria-labelledby="l-place" data-choice="place">
+            <button type="button" class="btn" data-value="inline">In the page</button>
+            <button type="button" class="btn" data-value="modal">Over the page</button>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend class="type-label">Theme · <span id="scheme">light</span></legend>
+        <p class="hint">Colours are kept for the theme the page is in: switch it in the header to set the other.</p>
+        <div class="swatches">
+          {
+            colors.map(([key, label]) => (
+              <label class="swatch">
+                <input type="color" data-color={key} />
+                <span>{label}</span>
+              </label>
+            ))
+          }
+        </div>
+        <div class="row">
+          <label for="font">Typeface</label>
+          <select id="font" name="font">
+            {fonts.map(([v, l]) => <option value={v}>{l}</option>)}
+          </select>
+        </div>
+        <p><button type="button" class="btn" id="reset">Back to the site’s theme</button></p>
+      </fieldset>
+    </form>
+  </div>
+
+  <div class="column out">
+    <div class="out-head">
+      <div class="segmented" role="tablist" aria-label="The code as">
+        <button type="button" class="btn" role="tab" data-code="html" aria-selected="true">HTML</button>
+        <button type="button" class="btn" role="tab" data-code="astro" aria-selected="false">Astro</button>
+      </div>
+      <button type="button" class="btn" data-copy-from="code">Copy</button>
+    </div>
+    <pre class="code"><code id="code"></code></pre>
+    <p class="note">
+      Only what differs from the defaults is written. See <a href={url('docs/attributes/')}>Attributes</a> and <a href={url('docs/theming/')}>Theming</a> for
+      the rest.
+    </p>
+  </div>
+</Base>
+
+<script>
+  import type { FocusReader } from '../../../src/element.ts';
+
+  type View = 'sequence' | 'flow';
+  type Scheme = 'light' | 'dark';
+  type ColorKey = 'paper' | 'ink' | 'muted' | 'accent';
+  interface Sample {
+    id: string;
+    lang: string;
+    text: string;
+  }
+
+  const root = document.documentElement;
+  const bench = document.getElementById('playground')!;
+  const tile = document.getElementById('tile')!;
+  const form = document.getElementById('controls') as HTMLFormElement;
+  const textarea = document.getElementById('text') as HTMLTextAreaElement;
+  const code = document.getElementById('code')!;
+  const samples: Sample[] = JSON.parse(bench.dataset.samples!);
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+
+  // the element's own defaults: what is not written in the code
+  const PACE = { sequence: { wpm: 150, words: 1, size: 'm' }, flow: { wpm: 300, words: 6, size: 'm' } };
+  const PROPS: Record<ColorKey, string> = { paper: '--fr-paper', ink: '--fr-ink', muted: '--fr-muted', accent: '--fr-accent' };
+  // the site's own colour behind each, to show in the pickers before any is changed
+  const TOKENS: Record<ColorKey, string> = { paper: '--color-paper', ink: '--color-ink', muted: '--color-text-muted', accent: '--color-citron' };
+
+  const state = {
+    text: samples[0].text,
+    sample: samples[0].id as string | null,
+    lang: samples[0].lang,
+    heading: 'My text',
+    view: 'sequence' as View,
+    pace: structuredClone(PACE) as Record<View, { wpm: number; words: number; size: string }>,
+    align: 'left',
+    underline: 'on',
+    place: 'inline',
+    theme: { light: {}, dark: {} } as Record<Scheme, Partial<Record<ColorKey, string>>>,
+    font: '',
+    code: 'html' as 'html' | 'astro',
+  };
+  let reader: FocusReader | null = null;
+
+  const scheme = (): Scheme =>
+    root.dataset.theme === 'light' || root.dataset.theme === 'dark' ? root.dataset.theme : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+
+  // ——— the reader
+
+  /** The attributes that differ from the element's defaults, in the order the docs give them. */
+  function attributes(): [string, string][] {
+    const pace = state.pace[state.view];
+    const base = PACE[state.view];
+    const out: [string, string][] = [];
+    if (state.heading) out.push(['heading', state.heading]);
+    if (state.lang !== 'en') out.push(['lang', state.lang]);
+    if (state.view !== 'sequence') out.push(['view', state.view]);
+    if (pace.wpm !== base.wpm) out.push(['wpm', String(pace.wpm)]);
+    if (pace.words !== base.words) out.push(['words', String(pace.words)]);
+    if (pace.size !== base.size) out.push(['size', pace.size]);
+    if (state.view === 'sequence' && state.align !== 'left') out.push(['align', state.align]);
+    if (state.view === 'flow' && state.underline === 'off') out.push(['underline', 'off']);
+    if (state.place === 'modal') out.push(['modal', '']);
+    return out;
+  }
+
+  /** The theme's declarations for a scheme: the accent does for its text too. */
+  function declarations(s: Scheme, withFont: boolean): [string, string][] {
+    const out: [string, string][] = [];
+    for (const [key, value] of Object.entries(state.theme[s]) as [ColorKey, string][]) {
+      out.push([PROPS[key], value]);
+      if (key === 'accent') out.push(['--fr-accent-text', value]);
+    }
+    if (withFont && state.font) out.push(['--fr-font-text', state.font]);
+    return out;
+  }
+
+  function paint() {
+    if (!reader) return;
+    for (const prop of [...Object.values(PROPS), '--fr-accent-text', '--fr-font-text']) reader.style.removeProperty(prop);
+    for (const [prop, value] of declarations(scheme(), true)) reader.style.setProperty(prop, value);
+  }
+
+  /** A new reader for the settings: they are read once, when it joins the page. */
+  function build() {
+    const next = document.createElement('focus-reader') as FocusReader;
+    for (const [name, value] of attributes()) next.setAttribute(name, value);
+    next.textContent = state.text;
+    next.addEventListener('focusreaderview', (e) => {
+      state.view = (e as CustomEvent<{ view: View }>).detail.view;
+      controls();
+      write();
+    });
+    reader = next;
+    paint();
+    tile.replaceChildren(next);
+    if (state.place === 'modal') {
+      const open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'btn primary open';
+      open.textContent = 'Open the reader';
+      open.addEventListener('click', () => next.open());
+      tile.append(open);
+    }
+    write();
+  }
+
+  // ——— the code
+
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  const css = (decl: [string, string][], pad: string) => decl.map(([p, v]) => `${pad}${p}: ${v};`).join('\n');
+
+  function html() {
+    const attrs = [['for', 'article-body'], ...attributes()].map(([n, v]) => (v ? `${n}="${esc(v)}"` : n));
+    const tag = attrs.join(' ').length > 70 ? `<focus-reader\n  ${attrs.join('\n  ')}\n></focus-reader>` : `<focus-reader ${attrs.join(' ')}></focus-reader>`;
+    const lines: string[] = [];
+    if (state.place === 'modal') lines.push(`<button onclick="document.querySelector('focus-reader').open()">Focus</button>`);
+    lines.push(tag, `<script type="module" src="https://cdn.jsdelivr.net/npm/focus-reader/dist/src/register.js"><\/script>`);
+    const light = declarations('light', true);
+    const dark = declarations('dark', false);
+    if (light.length || dark.length) {
+      lines.push('', '<style>');
+      if (light.length) lines.push(`  focus-reader {\n${css(light, '    ')}\n  }`);
+      if (dark.length) lines.push(`  @media (prefers-color-scheme: dark) {\n    focus-reader {\n${css(dark, '      ')}\n    }\n  }`);
+      lines.push('</style>');
+    }
+    return lines.join('\n');
+  }
+
+  const js = (v: unknown) => (typeof v === 'string' ? `'${v.replace(/'/g, "\\'")}'` : String(v));
+  const obj = (entries: [string, unknown][]) => `{ ${entries.map(([k, v]) => `${k}: ${js(v)}`).join(', ')} }`;
+
+  function astro() {
+    const options: string[] = [];
+    if (state.view !== 'sequence') options.push(`view: 'flow',`);
+    for (const view of ['sequence', 'flow'] as View[]) {
+      const pace = state.pace[view];
+      const base = PACE[view];
+      const entries: [string, unknown][] = [];
+      if (pace.wpm !== base.wpm) entries.push(['wpm', pace.wpm]);
+      if (pace.words !== base.words) entries.push(['words', pace.words]);
+      if (pace.size !== base.size) entries.push(['size', pace.size]);
+      if (view === 'sequence' && state.align !== 'left') entries.push(['align', state.align]);
+      if (view === 'flow' && state.underline === 'off') entries.push(['underline', false]);
+      if (entries.length) options.push(`${view}: ${obj(entries)},`);
+    }
+    const theme: string[] = [];
+    for (const s of ['light', 'dark'] as Scheme[]) {
+      const entries = Object.entries(state.theme[s]).flatMap(([k, v]): [string, unknown][] => (k === 'accent' ? [[k, v], ['accentText', v]] : [[k, v]]));
+      if (entries.length) theme.push(`${s}: ${obj(entries)},`);
+    }
+    if (state.font) theme.push(`fonts: { text: ${js(state.font)} },`);
+    if (theme.length) options.push(`theme: {\n      ${theme.join('\n      ')}\n    },`);
+    const call = options.length ? `focusReader({\n    ${options.join('\n    ')}\n  })` : 'focusReader()';
+    const props = [state.heading && `heading="${esc(state.heading)}"`, state.lang !== 'en' && `lang="${state.lang}"`, state.place === 'inline' && 'inline'].filter(Boolean);
+    const open = `<FocusReader${props.length ? ' ' + props.join(' ') : ''}`;
+    const use = state.place === 'inline' ? `${open} for="article-body" />` : `${open}>\n  <article><Content /></article>\n</FocusReader>`;
+    return `// astro.config.mjs
+import { defineConfig } from 'astro/config';
+import focusReader from 'focus-reader/astro';
+
+export default defineConfig({
+  integrations: [${call}],
+});
+
+---
+// a page
+import FocusReader from 'focus-reader/astro/FocusReader.astro';
+---
+${use}`;
+  }
+
+  function write() {
+    code.textContent = state.code === 'html' ? html() : astro();
+  }
+
+  // ——— the controls
+
+  /** The controls as the state has them. */
+  function controls() {
+    const pace = state.pace[state.view];
+    const choices: Record<string, string> = { view: state.view, size: pace.size, align: state.align, underline: state.underline, place: state.place };
+    for (const group of form.querySelectorAll<HTMLElement>('[data-choice]')) {
+      for (const b of group.querySelectorAll<HTMLButtonElement>('button')) b.setAttribute('aria-pressed', String(b.dataset.value === choices[group.dataset.choice!]));
+    }
+    for (const b of form.querySelectorAll<HTMLButtonElement>('[data-sample]')) b.setAttribute('aria-pressed', String(b.dataset.sample === state.sample));
+    for (const row of form.querySelectorAll<HTMLElement>('[data-only]')) row.hidden = row.dataset.only !== state.view;
+    $<HTMLInputElement>('wpm').value = String(pace.wpm);
+    $('wpm-out').textContent = `${pace.wpm} wpm`;
+    $<HTMLInputElement>('words').value = String(pace.words);
+    $('words-out').textContent = String(pace.words);
+    $<HTMLSelectElement>('lang').value = state.lang;
+    $<HTMLSelectElement>('font').value = state.font;
+    if (textarea.value !== state.text) textarea.value = state.text;
+    swatches();
+  }
+
+  /** The pickers show the colours of the theme the page is in: the ones chosen, else the site's own. */
+  function swatches() {
+    const s = scheme();
+    $('scheme').textContent = s;
+    const style = getComputedStyle(root);
+    for (const input of form.querySelectorAll<HTMLInputElement>('[data-color]')) {
+      const key = input.dataset.color as ColorKey;
+      input.value = (state.theme[s][key] ?? style.getPropertyValue(TOKENS[key]).trim()).toLowerCase();
+    }
+  }
+
+  for (const group of form.querySelectorAll<HTMLElement>('[data-choice]')) {
+    group.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-value]');
+      if (!b) return;
+      const key = group.dataset.choice!;
+      const value = b.dataset.value!;
+      if (key === 'view') state.view = value as View;
+      else if (key === 'size') state.pace[state.view].size = value;
+      else if (key === 'align') state.align = value;
+      else if (key === 'underline') state.underline = value;
+      else state.place = value;
+      controls();
+      build();
+    });
+  }
+  for (const id of ['wpm', 'words'] as const) {
+    const input = $<HTMLInputElement>(id);
+    // the figure follows the slider; the reader is rebuilt once it is let go
+    input.addEventListener('input', () => {
+      state.pace[state.view][id] = Number(input.value);
+      controls();
+      write();
+    });
+    input.addEventListener('change', build);
+  }
+  $('samples').addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-sample]');
+    const sample = samples.find((s) => s.id === b?.dataset.sample);
+    if (!sample) return;
+    Object.assign(state, { text: sample.text, sample: sample.id, lang: sample.lang });
+    controls();
+    build();
+  });
+  let typing = 0;
+  textarea.addEventListener('input', () => {
+    state.text = textarea.value;
+    state.sample = null;
+    controls();
+    clearTimeout(typing);
+    // the same reader reads the new text, keeping its place
+    typing = window.setTimeout(() => {
+      if (!reader) return;
+      reader.textContent = state.text;
+      reader.reload();
+    }, 300);
+  });
+  $<HTMLSelectElement>('lang').addEventListener('change', (e) => {
+    state.lang = (e.target as HTMLSelectElement).value;
+    build();
+  });
+  $<HTMLInputElement>('heading').addEventListener('input', (e) => {
+    state.heading = (e.target as HTMLInputElement).value;
+    reader?.setAttribute('heading', state.heading);
+    write();
+  });
+  for (const input of form.querySelectorAll<HTMLInputElement>('[data-color]')) {
+    input.addEventListener('input', () => {
+      state.theme[scheme()][input.dataset.color as ColorKey] = input.value;
+      paint();
+      write();
+    });
+  }
+  $<HTMLSelectElement>('font').addEventListener('change', (e) => {
+    state.font = (e.target as HTMLSelectElement).value;
+    paint();
+    write();
+  });
+  $('reset').addEventListener('click', () => {
+    state.theme = { light: {}, dark: {} };
+    state.font = '';
+    controls();
+    paint();
+    write();
+  });
+  form.addEventListener('submit', (e) => e.preventDefault());
+
+  for (const tab of document.querySelectorAll<HTMLButtonElement>('[data-code]')) {
+    tab.addEventListener('click', () => {
+      state.code = tab.dataset.code as 'html' | 'astro';
+      for (const t of document.querySelectorAll('[data-code]')) t.setAttribute('aria-selected', String(t === tab));
+      write();
+    });
+  }
+
+  // the page changed theme, from its switch or from the system's: the reader and the pickers follow
+  const retheme = () => {
+    swatches();
+    paint();
+  };
+  new MutationObserver(retheme).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', retheme);
+
+  controls();
+  customElements.whenDefined('focus-reader').then(build);
+</script>
+
+<style>
+  .head {
+    margin-top: var(--spacing-xl);
+  }
+  .kind {
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+  }
+  h1 {
+    margin-top: var(--spacing-sm);
+    font-family: var(--type-display-family);
+    font-size: clamp(2.75rem, 5vw, 4rem);
+    line-height: var(--type-display-line-height);
+  }
+  .standfirst {
+    max-width: 42rem;
+    margin-top: var(--spacing-md);
+    font-size: 1.25rem;
+    line-height: 1.45;
+    color: var(--color-text);
+  }
+
+  .bench {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 22rem;
+    gap: var(--spacing-xl);
+    align-items: start;
+    margin-top: var(--spacing-xl);
+  }
+  .stage {
+    position: sticky;
+    top: calc(var(--header-h) + var(--spacing-lg));
+  }
+  .tile {
+    height: min(600px, calc(100dvh - var(--header-h) - 120px));
+    min-height: 420px;
+    background: var(--color-paper-deep);
+  }
+  .tile :global(.open) {
+    position: absolute;
+    inset: 50% auto auto 50%;
+    translate: -50% -50%;
+  }
+  .waiting {
+    padding: var(--spacing-lg);
+    color: var(--color-text-muted);
+  }
+  .note,
+  .hint {
+    margin-top: var(--spacing-sm);
+    font-size: var(--type-caption-size);
+    line-height: var(--type-caption-line-height);
+    color: var(--color-text-muted);
+  }
+
+  fieldset {
+    min-width: 0;
+    margin: 0;
+    padding: 0 0 var(--spacing-lg);
+    border: 0;
+  }
+  fieldset + fieldset {
+    padding-top: var(--spacing-lg);
+    border-top: var(--spacing-hairline) solid var(--color-ink);
+  }
+  /* floated, the legend sits inside the fieldset, under its hairline, instead of on it */
+  legend {
+    float: left;
+    width: 100%;
+    padding: 0;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+  }
+  legend + * {
+    clear: both;
+  }
+  #samples {
+    margin-top: var(--spacing-md);
+  }
+  textarea {
+    display: block;
+    width: 100%;
+    margin-top: var(--spacing-sm);
+    padding: 10px 12px;
+    border: var(--spacing-hairline) solid var(--color-ink);
+    border-radius: 0;
+    background: var(--color-surface);
+    color: var(--color-text-strong);
+    font: inherit;
+    font-size: var(--type-body-sm-size);
+    line-height: var(--type-body-sm-line-height);
+    resize: vertical;
+  }
+  .row {
+    display: grid;
+    grid-template-columns: 5.5rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-md);
+    font-size: var(--type-body-sm-size);
+  }
+  .row > .segmented,
+  .row > select,
+  .row > input[type='text'] {
+    grid-column: 2 / -1;
+  }
+  .row label,
+  .row .lbl {
+    color: var(--color-text);
+  }
+  select,
+  input[type='text'] {
+    width: 100%;
+    height: 32px;
+    padding: 0 10px;
+    border: var(--spacing-hairline) solid var(--color-ink);
+    border-radius: 0;
+    background: var(--color-surface);
+    color: var(--color-text-strong);
+    font: inherit;
+    font-size: var(--type-body-sm-size);
+  }
+  input[type='range'] {
+    width: 100%;
+    accent-color: var(--color-ink);
+  }
+  output {
+    min-width: 4.5rem;
+    font-family: var(--type-label-family);
+    font-size: var(--type-label-size);
+    text-align: right;
+    text-transform: uppercase;
+  }
+  .swatches {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-md);
+  }
+  .swatch {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-family: var(--type-label-family);
+    font-size: var(--type-label-sm-size);
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+  .swatch input {
+    width: 100%;
+    height: 32px;
+    padding: 0;
+    border: var(--spacing-hairline) solid var(--color-ink);
+    border-radius: 0;
+    background: none;
+    cursor: pointer;
+  }
+  .swatch input::-webkit-color-swatch-wrapper {
+    padding: 0;
+  }
+  .swatch input::-webkit-color-swatch,
+  .swatch input::-moz-color-swatch {
+    border: 0;
+    border-radius: 0;
+  }
+  #reset {
+    margin-top: var(--spacing-md);
+  }
+
+  .out {
+    margin-top: var(--spacing-section);
+  }
+  .out-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    margin-bottom: -1px;
+  }
+  .out pre {
+    border: var(--spacing-hairline) solid var(--color-ink);
+    white-space: pre;
+  }
+
+  @media (max-width: 960px) {
+    .bench {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .stage {
+      position: static;
+    }
+    .tile {
+      height: 460px;
+    }
+  }
+</style>

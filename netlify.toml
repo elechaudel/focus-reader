@@ -1,0 +1,24 @@
+# Netlify builds the package's site (site/: landing, documentation, playground) from the repo root and serves it at
+# focus-reader.elchdl.com. The package itself goes to npm from GitHub Actions (release.yml), never from here.
+
+[build]
+  command = "pnpm site:build"
+  publish = "site/dist"
+
+[build.environment]
+  NODE_VERSION = "22.23.4"
+  PNPM_VERSION = "12.8.1"
+  SITE_URL = "https://focus-reader.elchdl.com"
+
+# Astro's hashed assets never change.
+[[headers]]
+  for = "/_astro/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "DENY"

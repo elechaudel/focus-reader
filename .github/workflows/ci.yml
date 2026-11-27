@@ -26,6 +26,8 @@ jobs:
       - run: pnpm check
       - run: pnpm build
       - run: pnpm test
+      # the site (landing, docs, playground) still builds with the package as it is
+      - run: pnpm site:build
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

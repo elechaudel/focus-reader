@@ -1,0 +1,21 @@
+---
+// The documentation opens on its first page.
+import { docPages } from '../../lib/docs';
+import { url } from '../../lib/url';
+
+const [first] = await docPages();
+const to = url(`docs/${first.id}/`);
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>focus-reader: documentation</title>
+    <meta http-equiv="refresh" content={`0; url=${to}`} />
+    <link rel="canonical" href={to} />
+    <meta name="robots" content="noindex" />
+  </head>
+  <body>
+    <p><a href={to}>Documentation</a></p>
+  </body>
+</html>

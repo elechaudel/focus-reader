@@ -1,0 +1,309 @@
+---
+// The landing: what it is and how to get it, with a reader in the page to try at once.
+import { Code } from 'astro:components';
+import FocusReader from '../../../astro/FocusReader.astro';
+import Base from '../layouts/Base.astro';
+import Install from '../components/Install.astro';
+import { GITHUB, NPM, url } from '../lib/url';
+
+const points = [
+  {
+    title: 'Two views',
+    text: 'Sequence shows one frame at a time on a band, so the eyes stay still. Flow keeps the whole text in view and moves it up a line at a time, like the lyrics of a song.',
+  },
+  {
+    title: 'It reads your page',
+    text: 'Point it at the article already there. Paragraphs, headings, lists and quotes are read; code, figures and tables are left out. The page stays as it is.',
+  },
+  {
+    title: 'One element',
+    text: 'A single custom element and a few pure functions. No dependency, no framework. Colours and fonts come from custom properties, every word from its labels.',
+  },
+  {
+    title: 'Astro included',
+    text: 'An integration sets the pace, the labels and the theme once for a site; a component wraps an article and adds the button that opens the reader.',
+  },
+];
+
+const html = `<button onclick="document.querySelector('focus-reader').open()">Focus</button>
+<focus-reader for="article-body" heading="A visual direction" modal persist></focus-reader>
+<script type="module">import 'focus-reader/element';</script>`;
+
+const astro = `---
+import FocusReader from 'focus-reader/astro/FocusReader.astro';
+---
+<FocusReader heading={title}>
+  <article><Content /></article>
+</FocusReader>`;
+---
+
+<Base>
+  <section class="hero column">
+    <div class="pitch">
+      <h1>A text, a few words at a time.</h1>
+      <p class="lede">
+        <code>&lt;focus-reader&gt;</code> shows a text like subtitles, at a pace you pick, in a panel with its size and progress. It reads the article already
+        on your page, which stays as it is.
+      </p>
+      <Install />
+      <p class="actions">
+        <a class="btn primary" href={url('docs/')}>Read the docs</a>
+        <a class="btn" href={url('playground/')}>Try it with your text</a>
+      </p>
+    </div>
+    <div class="stage">
+      <div class="tile">
+        <FocusReader for="pitch" heading="focus-reader" inline />
+      </div>
+    </div>
+    <template id="pitch">
+      <p>
+        Most of what we read on a screen asks the eye to do two jobs at once: follow the words, and find its way back to the line after every glance away.
+        The focus reader takes the second job off its hands. It shows the text a few words at a time, in the same place, at a pace you choose, and you only
+        have to read.
+      </p>
+      <p>
+        It has two views. Sequence puts each frame on a band between two rulers, one word or a few at a time. Flow shows the whole text and moves it up a
+        line at a time, the words being read marked, the way an app shows the lyrics of a song. In Flow, a frame can also be a whole paragraph, with a line
+        in the margin that fills as its time goes.
+      </p>
+      <p>
+        Reading back matters more than reading fast. Pause, and the sentence shows under the band; the arrows, a scroll or a swipe go a frame back or on. A
+        comma makes a frame stay a beat longer, the end of a sentence two, and the whole is scaled so the rate shown is the rate you get.
+      </p>
+      <p>
+        It is a single custom element, with no dependency and no framework. Its colours and fonts come from custom properties, its words from a labels
+        attribute, so it fits a page and speaks its language.
+      </p>
+    </template>
+  </section>
+
+  <section class="column">
+    <ul class="points">
+      {
+        points.map((p, i) => (
+          <li>
+            <p class="type-label n">{String(i + 1).padStart(2, '0')}</p>
+            <h2>{p.title}</h2>
+            <p>{p.text}</p>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
+  <section class="column split">
+    <div class="prose">
+      <h2>Three lines of HTML</h2>
+      <p>
+        Give the reader the id of the text to read and a way to open it. With <code>modal</code> it stays hidden until then; without it, it sits in the page
+        and fills its box. <code>persist</code> remembers each reader's settings in their browser.
+      </p>
+      <p>
+        On an Astro site, the component wraps the article and adds the button itself. Without JavaScript the article reads as it is, and the button never
+        shows.
+      </p>
+      <p><a href={url('docs/getting-started/')}>Getting started →</a></p>
+    </div>
+    <div class="codes">
+      <p class="type-label">HTML</p>
+      <Code code={html} lang="html" theme="css-variables" />
+      <p class="type-label">Astro</p>
+      <Code code={astro} lang="astro" theme="css-variables" />
+    </div>
+  </section>
+
+  <section class="column">
+    <nav class="next" aria-label="Where to go next">
+    <a class="door" href={url('docs/')}>
+      <span class="type-label">Documentation</span>
+      <span class="title">How everything works →</span>
+    </a>
+    <a class="door" href={url('playground/')}>
+      <span class="type-label">Playground</span>
+      <span class="title">Read your own text →</span>
+    </a>
+    <a class="door" href={GITHUB} target="_blank" rel="noopener">
+      <span class="type-label">Source</span>
+      <span class="title">GitHub ↗</span>
+    </a>
+    <a class="door" href={NPM} target="_blank" rel="noopener">
+      <span class="type-label">Package</span>
+      <span class="title">npm ↗</span>
+    </a>
+    </nav>
+  </section>
+</Base>
+
+<style>
+  section {
+    margin-top: var(--spacing-section);
+  }
+
+  /* the pitch centred, the reader under it across the column */
+  .hero {
+    margin-top: var(--spacing-page-y);
+  }
+  .pitch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .stage {
+    margin-top: var(--spacing-section);
+  }
+  h1 {
+    font-family: var(--type-display-family);
+    font-size: clamp(3.25rem, 6.2vw, var(--type-display-size));
+    line-height: var(--type-display-line-height);
+    letter-spacing: var(--type-display-tracking);
+  }
+  .lede {
+    max-width: 38rem;
+    margin-top: var(--spacing-lg);
+    font-size: 1.25rem;
+    line-height: 1.45;
+    color: var(--color-text);
+  }
+  .lede code,
+  .prose code {
+    font-family: var(--type-label-family);
+    font-size: 0.875em;
+  }
+  .lede code {
+    padding: 0.1em 0.3em;
+    background: var(--color-paper-deep);
+  }
+  .pitch :global(.install) {
+    width: 100%;
+    margin-top: var(--spacing-xl);
+    text-align: left;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-lg);
+  }
+  .stage .tile {
+    height: 520px;
+  }
+
+  .points {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: var(--spacing-hairline) solid var(--color-ink);
+  }
+  .points li {
+    padding: var(--spacing-lg);
+    font-size: var(--type-body-sm-size);
+    line-height: var(--type-body-sm-line-height);
+    color: var(--color-text);
+  }
+  .points li + li {
+    border-left: var(--spacing-hairline) solid var(--color-ink);
+  }
+  .points .n {
+    color: var(--color-text-muted);
+  }
+  .points h2 {
+    margin-block: var(--spacing-md) var(--spacing-sm);
+    font-family: var(--type-headline-md-family);
+    font-size: var(--type-headline-md-size);
+    line-height: 1;
+  }
+
+  .split {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    gap: var(--spacing-xl);
+    align-items: start;
+    padding-top: var(--spacing-section);
+    border-top: var(--spacing-hairline) solid var(--color-ink);
+  }
+  .split .prose h2 {
+    margin-top: 0;
+    font-size: var(--type-headline-lg-size);
+  }
+  .codes .type-label {
+    margin-bottom: var(--spacing-sm);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+  }
+  .codes :global(pre) + .type-label {
+    margin-top: var(--spacing-lg);
+  }
+
+  .next {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border: var(--spacing-hairline) solid var(--color-ink);
+  }
+  .door {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
+    text-decoration: none;
+    color: var(--color-ink);
+  }
+  .door + .door {
+    border-left: var(--spacing-hairline) solid var(--color-ink);
+  }
+  .door .type-label {
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+  }
+  .door .title {
+    font-family: var(--type-headline-sm-family);
+    font-size: var(--type-headline-sm-size);
+    line-height: 1;
+  }
+  .door:hover {
+    background: var(--color-paper-deep);
+    color: var(--color-ink);
+  }
+
+  @media (max-width: 960px) {
+    .split {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .hero {
+      margin-top: var(--spacing-xl);
+    }
+    .stage {
+      margin-top: var(--spacing-xl);
+    }
+    .points,
+    .next {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .points li:nth-child(3),
+    .next .door:nth-child(3) {
+      border-left: 0;
+    }
+    .points li:nth-child(n + 3),
+    .next .door:nth-child(n + 3) {
+      border-top: var(--spacing-hairline) solid var(--color-ink);
+    }
+  }
+  @media (max-width: 560px) {
+    .points,
+    .next {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .points li + li,
+    .next .door + .door {
+      border-left: 0;
+      border-top: var(--spacing-hairline) solid var(--color-ink);
+    }
+    .stage .tile {
+      height: 440px;
+    }
+  }
+</style>

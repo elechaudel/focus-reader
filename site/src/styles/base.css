@@ -1,0 +1,236 @@
+/* Base styles shared by every page. Needs tokens.css. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  /* the visible height: on phones, 100vh is measured with the browser's bars hidden, so a page of that
+     height scrolls, and leaves a strip under its last element, while the bars show */
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--color-paper);
+  color: var(--color-text-strong);
+  font-family: var(--type-body-family);
+  font-size: var(--type-body-size);
+  font-weight: var(--type-body-weight);
+  line-height: var(--type-body-line-height);
+  -webkit-font-smoothing: antialiased;
+}
+
+:where(h1, h2, h3, h4, h5, h6, p, ul, ol, figure, blockquote) {
+  margin: 0;
+}
+
+:where(h1, h2, h3, h4, h5, h6) {
+  color: var(--color-ink);
+  font-weight: 400;
+}
+
+/* Mono labels are uppercase (DESIGN.md, Typography). */
+:where(.type-label, .type-label-sm) {
+  text-transform: uppercase;
+}
+
+/* Secondary text: dates, counts, captions. */
+.muted {
+  color: var(--color-text-muted);
+}
+
+/* Read by screen readers, not shown. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+hr {
+  height: var(--spacing-hairline);
+  margin: 0;
+  border: 0;
+  background: var(--color-rule);
+}
+
+a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+a:hover {
+  color: var(--color-text-cobalt);
+}
+
+:focus-visible {
+  outline: 1px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--color-primary);
+  color: var(--color-on-accent);
+}
+
+/* Grain over the whole page, interface included (DESIGN.md, Colors). It covers the document and scrolls with
+   it rather than staying fixed: Safari on iPhone takes a full-screen fixed layer for a bar pinned at the top,
+   and then leaves the page visible under its status bar, above any sticky bar. */
+body {
+  position: relative;
+}
+
+body::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+  opacity: 0.3;
+  background-image: var(--grain-light);
+  background-size: 240px 240px;
+}
+
+/* On a dark page the grain turns into pale specks. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) body::after {
+    opacity: 0.12;
+    background-image: var(--grain-dark);
+  }
+}
+
+:root[data-theme='dark'] body::after {
+  opacity: 0.12;
+  background-image: var(--grain-dark);
+}
+
+:root {
+  --grain-light: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='g' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.18  0 0 0 0 0.17  0 0 0 0 0.16  -1 0 0 0 0.62'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  --grain-dark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='g' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.95  0 0 0 0 0.95  0 0 0 0 0.93  -1 0 0 0 0.62'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+
+/* Code, highlighted by Shiki at build time with its css-variables theme (Markdown, the slides' Code
+   template, <Code theme="css-variables">), in two themes (DESIGN.md, Code).
+   Dark, the default: on the dark panel, in both themes of the site.
+   Light, chosen with data-code-theme="light" on the block or on any element around it (a page, a deck;
+   `light` after the language of a Markdown fence): on surface with an ink hairline, light in both themes
+   of the site too, so it takes the light-* values, which do not change with the theme.
+   The variables are set on the block itself, so a theme preview around it gets its own colours. */
+:where(.astro-code) {
+  --astro-code-foreground: var(--color-on-panel);
+  --astro-code-background: var(--color-panel);
+  --astro-code-token-keyword: var(--color-on-panel-cobalt);
+  --astro-code-token-function: var(--color-on-panel-cobalt);
+  --astro-code-token-constant: var(--color-lavande);
+  --astro-code-token-link: var(--color-lavande);
+  --astro-code-token-string: var(--color-citron);
+  --astro-code-token-string-expression: var(--color-citron);
+  --astro-code-token-comment: var(--color-on-panel-faint);
+  --astro-code-token-punctuation: var(--color-on-panel-muted);
+  --astro-code-token-parameter: var(--color-on-panel);
+  /* Diffs: added lines anis, removed lines vermillon, changed lines (context diffs) citron. */
+  --astro-code-token-inserted: var(--color-anis);
+  --astro-code-token-deleted: var(--color-vermillon);
+  --astro-code-token-changed: var(--color-citron);
+  /* Line backgrounds (below), and the colours that replace cobalt and comments on them. */
+  --code-line-added: color-mix(in srgb, var(--color-anis) 14%, transparent);
+  --code-line-removed: color-mix(in srgb, var(--color-vermillon) 14%, transparent);
+  --code-line-changed: color-mix(in srgb, var(--color-citron) 12%, transparent);
+  --code-line-highlighted: color-mix(in srgb, var(--color-on-panel) 10%, transparent);
+  --code-marked-cobalt: color-mix(in srgb, var(--color-on-panel-cobalt) 80%, var(--color-on-panel));
+  --code-marked-comment: var(--color-on-panel-muted);
+  --code-rule: var(--color-rule-dark);
+}
+:where([data-code-theme='light']) :where(.astro-code),
+:where(.astro-code[data-code-theme='light']) {
+  --astro-code-foreground: var(--color-light-text-strong);
+  --astro-code-background: var(--color-light-surface);
+  --astro-code-token-keyword: var(--color-light-text-cobalt);
+  --astro-code-token-function: var(--color-light-text-cobalt);
+  --astro-code-token-constant: var(--color-light-text-lavande);
+  --astro-code-token-link: var(--color-light-text-lavande);
+  --astro-code-token-string: var(--color-light-text-citron);
+  --astro-code-token-string-expression: var(--color-light-text-citron);
+  --astro-code-token-comment: var(--color-light-text-muted);
+  --astro-code-token-punctuation: var(--color-light-text);
+  --astro-code-token-parameter: var(--color-light-text-strong);
+  --astro-code-token-inserted: var(--color-light-text-anis);
+  --astro-code-token-deleted: var(--color-light-text-vermillon);
+  --astro-code-token-changed: var(--color-light-text-citron);
+  --code-line-added: color-mix(in srgb, var(--color-anis) 22%, transparent);
+  --code-line-removed: color-mix(in srgb, var(--color-vermillon) 10%, transparent);
+  --code-line-changed: color-mix(in srgb, var(--color-citron) 25%, transparent);
+  --code-line-highlighted: color-mix(in srgb, var(--color-light-ink) 6%, transparent);
+  --code-marked-cobalt: var(--color-light-text-cobalt);
+  --code-marked-comment: var(--color-light-text-muted);
+  --code-rule: var(--color-light-ink);
+  color-scheme: light;
+}
+/* A light block keeps an ink hairline around it, as a card on the page. */
+:where([data-code-theme='light']) pre.astro-code,
+pre.astro-code[data-code-theme='light'] {
+  border: var(--spacing-hairline, 1px) solid var(--code-rule);
+}
+
+/* Terminal output (lang ansi): with the css-variables theme, Shiki writes its colours as placeholders
+   (#000000NN, nearly transparent) instead of the ansi-* variables, so it shows as plain text instead. */
+:where(.astro-code[data-language='ansi']) span {
+  color: inherit !important;
+}
+
+/* Lines span the whole block, so a line's background (diffs, highlights) reaches both edges, even when the
+   code scrolls sideways. A context gives the block's side padding to its lines through --code-pad-x. */
+pre.astro-code > code {
+  display: block;
+  width: max-content;
+  min-width: 100%;
+}
+pre.astro-code .line {
+  display: inline-block;
+  width: 100%;
+  padding-inline: var(--code-pad-x, 0);
+}
+
+/* Line backgrounds: added, removed and changed lines, in a diff block (lang diff, coloured by its tokens)
+   or marked in any language (// [!code ++], // [!code --]); highlighted lines (// [!code highlight], or
+   {2,4-5} after the language) on a neutral tint. On the dark panel, cobalt is lifted a little and comments
+   take on-panel-muted on these lines, so every text keeps 4.5:1 on its tint, in both code themes. */
+pre.astro-code :is(.line.diff, .line.highlighted, .line:has(> span[style*='token-inserted'], > span[style*='token-deleted'], > span[style*='token-changed'])) {
+  --astro-code-token-keyword: var(--code-marked-cobalt);
+  --astro-code-token-function: var(--code-marked-cobalt);
+  --astro-code-token-comment: var(--code-marked-comment);
+}
+pre.astro-code :is(.line.diff.add, .line:has(> span[style*='token-inserted'])) {
+  background: var(--code-line-added);
+}
+pre.astro-code :is(.line.diff.remove, .line:has(> span[style*='token-deleted'])) {
+  background: var(--code-line-removed);
+}
+pre.astro-code .line:has(> span[style*='token-changed']) {
+  background: var(--code-line-changed);
+}
+pre.astro-code .line.highlighted {
+  background: var(--code-line-highlighted);
+}
+/* Marked lines also carry their sign, so the change does not rest on colour alone. */
+pre.astro-code.has-diff .line::before {
+  content: '  ';
+  white-space: pre;
+}
+pre.astro-code.has-diff .line.diff.add::before {
+  content: '+ ';
+  color: var(--astro-code-token-inserted);
+}
+pre.astro-code.has-diff .line.diff.remove::before {
+  content: '- ';
+  color: var(--astro-code-token-deleted);
+}

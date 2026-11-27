@@ -1,0 +1,117 @@
+---
+// Light / auto / dark switch (DESIGN.md, Components): one button that moves to the next mode.
+// Base.astro applies the stored choice before the first paint, and the CSS below shows the
+// matching label from it, so the button is right before this script runs.
+const modes = [
+  { id: 'light', label: 'Light' },
+  { id: 'system', label: 'Auto' },
+  { id: 'dark', label: 'Dark' },
+];
+---
+
+<button type="button" class="theme-toggle type-label" title="Change theme">
+  <span class="visually-hidden">Theme:</span>
+  {
+    modes.map((m) => (
+      <span class={`mode ${m.id}`}>
+        <span class="swatch" aria-hidden="true" />
+        <span class="name">{m.label}</span>
+      </span>
+    ))
+  }
+</button>
+
+<script>
+  type Mode = 'light' | 'system' | 'dark';
+  const KEY = 'theme';
+  const root = document.documentElement;
+  const metas = [...document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')];
+  const color = (scheme?: string) => metas.find((m) => m.dataset.scheme === scheme)?.dataset.color;
+  const osDark = matchMedia('(prefers-color-scheme: dark)');
+
+  const current = (): Mode => (root.dataset.theme === 'light' || root.dataset.theme === 'dark' ? root.dataset.theme : 'system');
+
+  // From Auto, go to the opposite of what the system shows, so every click changes the page.
+  function next(mode: Mode): Mode {
+    const [first, second]: Mode[] = osDark.matches ? ['light', 'dark'] : ['dark', 'light'];
+    return mode === 'system' ? first : mode === first ? second : 'system';
+  }
+
+  function apply(mode: Mode) {
+    if (mode === 'system') delete root.dataset.theme;
+    else root.dataset.theme = mode;
+    // Each theme-color meta keeps its own colour in data-color; a chosen theme overrides both.
+    for (const m of metas) m.content = color(mode === 'system' ? m.dataset.scheme : mode) ?? m.content;
+    try {
+      if (mode === 'system') localStorage.removeItem(KEY);
+      else localStorage.setItem(KEY, mode);
+    } catch {}
+  }
+
+  for (const b of document.querySelectorAll<HTMLButtonElement>('.theme-toggle')) {
+    b.addEventListener('click', () => apply(next(current())));
+  }
+</script>
+
+<style>
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    height: 32px;
+    margin: 0;
+    padding: 0 10px;
+    border: var(--spacing-hairline) solid var(--color-ink);
+    border-radius: var(--rounded-none);
+    background: transparent;
+    color: var(--color-ink);
+    cursor: pointer;
+  }
+  .theme-toggle:hover {
+    background: var(--color-paper-deep);
+  }
+  .theme-toggle:focus-visible {
+    outline-offset: 2px;
+  }
+
+  /* Only the label of the mode in use shows. */
+  .mode {
+    display: none;
+    align-items: center;
+    gap: 8px;
+  }
+  :global(:root[data-theme='light']) .mode.light,
+  :global(:root[data-theme='dark']) .mode.dark,
+  :global(:root:not([data-theme])) .mode.system {
+    display: inline-flex;
+  }
+
+  /* Each mode is a small cell: an outline for light, ink for dark, half and half for auto. */
+  .swatch {
+    width: 10px;
+    height: 10px;
+    border: var(--spacing-hairline) solid currentColor;
+  }
+  .dark .swatch {
+    background: currentColor;
+  }
+  .system .swatch {
+    background: linear-gradient(135deg, transparent 50%, currentColor 50%);
+  }
+
+  /* On phones, where the header is short of room, the cell alone says the mode; its name stays for screen readers. */
+  @media (max-width: 640px) {
+    .theme-toggle {
+      width: 32px;
+      justify-content: center;
+      padding: 0;
+    }
+    .name {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
+</style>
