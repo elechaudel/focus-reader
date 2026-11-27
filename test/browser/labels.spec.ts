@@ -98,19 +98,34 @@ test('labels that are not JSON: a warning, and the defaults', async ({ page }) =
 
 test('a text without spaces: words cut by Intl.Segmenter, shown without spaces', async ({ page }) => {
   await load(page, 'src=ja&lang=ja&modal');
+  // each browser's segmenter has its own dictionary (Chrome and Safari cut this text into 8 words, Firefox
+  // into 5), so the words expected are the ones this browser finds, punctuation kept with the word before
+  const words = await page.evaluate((t) => {
+    const out: string[] = [];
+    for (const { segment, isWordLike } of new Intl.Segmenter('ja', { granularity: 'word' }).segment(t)) {
+      if (isWordLike || !out.length) out.push(segment);
+      else out[out.length - 1] += segment;
+    }
+    return out;
+  }, '日本語の文章です。次の文、短い。');
+  expect(words.length).toBeGreaterThan(2);
   await open(page);
   let s = await state(page);
-  expect(s.total).toBe('/ 8');
-  expect(s.chunk).toBe('日本語');
+  expect(s.total).toBe(`/ ${words.length}`);
+  expect(s.chunk).toBe(words[0]);
   await act(page, 'words+');
   await act(page, 'words+');
   s = await state(page);
-  expect(s.chunk).toBe('日本語の文章');
-  await page.keyboard.press('ArrowRight');
-  await page.keyboard.press('ArrowRight');
-  s = await state(page);
-  expect(s.chunk).toBe('次の文、');
-  // paused, the sentence under the band, without spaces either
+  // three words at a time, side by side as written (a frame stops at the end of a sentence)
+  const first = words.slice(0, words.findIndex((w) => w.endsWith('。')) + 1);
+  expect(s.chunk).toBe(first.slice(0, 3).join(''));
+  // on to the second sentence; paused, the sentence under the band, without spaces either
+  for (let i = 0; i < words.length && !s.chunk.startsWith('次'); i++) {
+    await page.keyboard.press('ArrowRight');
+    s = await state(page);
+  }
+  expect(s.chunk.startsWith('次')).toBe(true);
+  expect(s.chunk).not.toContain(' ');
   expect(s.context).toBe('次の文、短い。');
   // Flow: the words side by side, as written
   await act(page, 'view');
