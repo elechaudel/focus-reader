@@ -1,8 +1,28 @@
 {
   "name": "focus-reader",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "description": "<focus-reader>: a text read a few words at a time, like subtitles, in a panel with its pace, size and progress. No dependency, no framework; an Astro integration and component too.",
+  "keywords": [
+    "custom-element",
+    "web-component",
+    "reading",
+    "speed-reading",
+    "rsvp",
+    "accessibility",
+    "astro",
+    "astro-integration",
+    "astro-component"
+  ],
+  "license": "MIT",
+  "author": "Edgar Lechaudel",
+  "homepage": "https://github.com/elechaudel/focus-reader#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/elechaudel/focus-reader.git"
+  },
+  "bugs": "https://github.com/elechaudel/focus-reader/issues",
   "exports": {
     ".": "./src/index.ts",
     "./element": "./src/element.ts",
@@ -11,13 +31,54 @@
     "./astro": "./astro/index.ts",
     "./astro/FocusReader.astro": "./astro/FocusReader.astro"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/src/index.d.ts",
+        "default": "./dist/src/index.js"
+      },
+      "./element": {
+        "types": "./dist/src/element.d.ts",
+        "default": "./dist/src/element.js"
+      },
+      "./text": {
+        "types": "./dist/src/text.d.ts",
+        "default": "./dist/src/text.js"
+      },
+      "./register": {
+        "types": "./dist/src/register.d.ts",
+        "default": "./dist/src/register.js"
+      },
+      "./astro": {
+        "types": "./dist/astro/index.d.ts",
+        "default": "./dist/astro/index.js"
+      },
+      "./astro/FocusReader.astro": "./dist/astro/FocusReader.astro",
+      "./package.json": "./package.json"
+    }
+  },
   "scripts": {
+    "build": "node scripts/build.mjs",
+    "prepack": "node scripts/build.mjs",
     "check": "tsc -p .",
     "test": "pnpm test:unit && pnpm test:browser",
     "test:unit": "node --test --no-warnings=ExperimentalWarning 'test/*.test.ts'",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "demo": "vite --open /demo/",
+    "demo:build": "vite build demo --base ./ --outDir ../demo-dist --emptyOutDir",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "changeset publish"
   },
   "devDependencies": {
+    "@changesets/cli": "^3.0.3",
     "@playwright/test": "1.64.1",
     "@types/node": "^22.20.5",
     "astro": "^7.4.4",

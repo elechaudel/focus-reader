@@ -1,0 +1,120 @@
+<!doctype html>
+<!--
+  The demo: <focus-reader> on a plain HTML page, as the README shows it. `pnpm demo` serves it with Vite;
+  `pnpm demo:build` writes it to demo-dist/, a static folder to host anywhere.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>focus-reader: demo</title>
+    <meta name="description" content="A text read a few words at a time, like subtitles, in a panel with its pace, size and progress." />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --paper: light-dark(#f6f5f1, #161716);
+        --ink: light-dark(#161716, #f1f0ec);
+        --muted: light-dark(#5d5c57, #a3a19b);
+        --rule: light-dark(#d4d2cb, #3a3b39);
+        font-family: system-ui, sans-serif;
+        background: var(--paper);
+        color: var(--ink);
+      }
+      body { margin: 0; }
+      main { max-width: 44rem; margin: 0 auto; padding: 48px 16px 96px; line-height: 1.6; }
+      h1 { font-size: 2.2rem; line-height: 1.15; margin: 0 0 12px; }
+      h2 { font-size: 1.3rem; margin: 48px 0 8px; }
+      .lede { color: var(--muted); margin: 0 0 24px; }
+      code, pre { font-family: ui-monospace, monospace; font-size: 0.9em; }
+      pre { overflow-x: auto; padding: 12px 16px; border: 1px solid var(--rule); }
+      button.open { font: inherit; padding: 8px 16px; border: 1px solid var(--ink); background: none; color: inherit; cursor: pointer; }
+      .tile { height: 520px; border: 1px solid var(--rule); margin: 16px 0; }
+      .tile focus-reader { height: 100%; min-height: 0; }
+      /* the third reader takes its colours and fonts from the page, through --fr-* */
+      .themed focus-reader {
+        --fr-paper: var(--paper);
+        --fr-ink: var(--ink);
+        --fr-muted: var(--muted);
+        --fr-rule: var(--rule);
+        --fr-accent: #d4380d;
+        --fr-accent-text: light-dark(#b02e0a, #ff7a50);
+        --fr-font-text: Georgia, serif;
+      }
+      footer { color: var(--muted); font-size: 0.9rem; margin-top: 64px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <article id="article">
+        <h1>focus-reader</h1>
+        <p class="lede">A text read a few words at a time, like subtitles, in a panel with its pace, size and progress.</p>
+        <p data-focus-reader-skip>
+          <button type="button" class="open" id="open">Read this page in the focus reader</button>
+        </p>
+        <p>
+          Most of what we read on a screen asks the eye to do two jobs at once: follow the words, and find its way
+          back to the line after every glance away. The focus reader takes the second job off its hands. It shows
+          the text a few words at a time, in the same place, at a pace you choose, and you only have to read.
+        </p>
+        <p>
+          It has two views. Sequence puts each frame on a band between two rulers, one word or a few at a time.
+          Flow shows the whole text and moves it up a line at a time, the words being read marked, the way an app
+          shows the lyrics of a song. In Flow, a frame can also be a whole paragraph, with a line in the margin
+          that fills as its time goes.
+        </p>
+        <p>
+          Reading back matters more than reading fast. Pause, and the sentence shows under the band; the arrows,
+          a scroll or a swipe go a frame back or on. A comma makes a frame stay a beat longer, the end of a
+          sentence two, and the whole is scaled so the rate shown is the rate you get.
+        </p>
+        <p>
+          It is a single custom element, with no dependency and no framework. Its colours and fonts come from
+          custom properties, its words from a labels attribute, so it fits a page and speaks its language.
+        </p>
+      </article>
+
+      <!-- 1. Over the page: hidden until opened, reading the article above -->
+      <focus-reader id="page-reader" for="article" heading="focus-reader: demo" modal></focus-reader>
+
+      <h2>In the page</h2>
+      <p>Without <code>modal</code>, the reader sits in the page and fills its box. This one starts in Flow and reads its own text, in French, with French labels.</p>
+      <div class="tile">
+        <focus-reader
+          view="flow"
+          lang="fr"
+          heading="Un texte en français"
+          labels='{"name": "Lecteur", "view": "Vue", "speed": "Vitesse", "words": "Mots", "size": "Taille", "underline": "Souligné", "on": "Oui", "off": "Non", "rate": "Débit", "wpm": "mots/min", "read": "Lus", "remaining": "Reste", "progress": "Progression", "play": "Lire", "reading": "Lecture", "again": "Relire", "fullScreen": "Plein écran", "close": "Fermer", "touchKeys": "Touchez pour lire ou mettre en pause, glissez pour un mot", "wordsAtATime": ["{n} mot à la fois", "{n} mots à la fois"]}'
+        >
+          <template>
+            <h2>Lire autrement</h2>
+            <p>Un texte peut se lire de plusieurs façons. Sur le papier, l'œil suit une ligne, saute à la suivante, revient en arrière quand il a perdu le fil, et personne ne le remarque.</p>
+            <p>Ici, le texte avance seul, au rythme choisi. Les mots déjà lus s'estompent, ceux qui restent attendent, et la ligne en cours reste toujours au même endroit.</p>
+          </template>
+        </focus-reader>
+      </div>
+
+      <h2>Styled by the page</h2>
+      <p>The same element, its colours and typeface set from the page with <code>--fr-*</code> custom properties, in light and dark.</p>
+      <div class="tile themed">
+        <focus-reader heading="A text in Georgia" words="2">
+          <template>
+            <p>Everything the panel shows comes from a handful of custom properties: the paper, the ink, the accent, and three typefaces, for the words, the labels and the figures. Set them on the element, or on anything around it.</p>
+          </template>
+        </focus-reader>
+      </div>
+
+      <h2>On your page</h2>
+<pre><code>&lt;button onclick="document.querySelector('focus-reader').open()"&gt;Focus&lt;/button&gt;
+&lt;focus-reader for="article-body" heading="A title" modal persist&gt;&lt;/focus-reader&gt;
+&lt;script type="module" src="https://cdn.jsdelivr.net/npm/focus-reader/dist/src/register.js"&gt;&lt;/script&gt;</code></pre>
+
+      <footer>MIT licence. Started as a Lab experiment on elchdl, The Focus Reader.</footer>
+    </main>
+
+    <script type="module">
+      import '../src/register.ts';
+
+      document.getElementById('open').addEventListener('click', () => document.getElementById('page-reader').open());
+    </script>
+  </body>
+</html>

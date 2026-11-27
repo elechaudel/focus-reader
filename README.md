@@ -1,6 +1,22 @@
 # focus-reader
 
-`<focus-reader>` shows a text a few words at a time, like subtitles, at a pace you pick. It started as a Lab experiment on elchdl, The Focus Reader (`/lab/the-focus-reader/`), and is kept free of the site so it can become a package of its own: no dependency, no framework, a custom element and a few pure functions.
+`<focus-reader>` shows a text a few words at a time, like subtitles, at a pace you pick, in a panel with its size and progress. It reads the article already on your page, which stays as it is. It is one custom element and a few pure functions, with no dependency and no framework. An Astro integration and component come with it.
+
+It started as a Lab experiment on elchdl, [The Focus Reader](https://elchdl.com/lab/the-focus-reader/). See it on a plain page with `pnpm demo` (the demo is in `demo/`).
+
+## Install
+
+```sh
+npm install focus-reader
+```
+
+Or, on a page with no build step, from a CDN:
+
+```html
+<script type="module" src="https://cdn.jsdelivr.net/npm/focus-reader/dist/src/register.js"></script>
+```
+
+It works in the browsers of [Baseline widely available](https://web.dev/baseline), and is tested in the latest Chrome, Firefox and Safari, on the desktop and on iOS. Without JavaScript, the page reads as it is: a reader you open stays hidden, so give its button `hidden` and show it from your script, as the Astro component does.
 
 ## Use
 
@@ -9,6 +25,8 @@
 <focus-reader for="article-body" heading="A visual direction" modal persist></focus-reader>
 <script type="module">import 'focus-reader/element';</script>
 ```
+
+`focus-reader/element` (or `focus-reader`) registers the element and exports its class; `focus-reader/register` registers it and exports nothing.
 
 - `for`: id of the element whose text it reads (an article's body, a `<template>`). Without it, a `<template>` inside the element, or else its own content. Paragraphs, headings, list items and quotes are read; code blocks, figures, media, tables and anything with `data-focus-reader-skip` are not. Words are cut at spaces, and a run in a language written without them (Chinese, Japanese, Thai…) is cut by `Intl.Segmenter`, in the reader's language.
 - `heading`: the title at the top. `name`: the label before it (default "Focus reader"; empty, no label).
@@ -107,10 +125,26 @@ Everything comes from custom properties on the element, with system defaults (`C
 
 `focus-reader/text`: `blocksFromElement`, `blocksFromText`, `parse` (with the text's language, for `Intl.Segmenter`), `frames`, `schedule`, `frameAt`, `orp`, `join`.
 
+## Development
+
+```sh
+pnpm install
+pnpm check   # types
+pnpm test    # unit and browser tests
+pnpm demo    # the demo page, served by Vite
+pnpm build   # dist/, as npm gets it
+```
+
+The package exports its TypeScript sources while you work on it; `publishConfig` points npm at `dist/` (`pnpm build` writes it, and `pnpm pack` and `pnpm publish` run it first). `pnpm demo:build` writes the demo to `demo-dist/`, a static folder to host anywhere. Releases go through Changesets: see [RELEASING.md](RELEASING.md).
+
 ## Tests
 
 - `pnpm test:unit`: the text functions (blocks from plain text, words, frames, timing, `frameAt`, `orp`), with Node's own test runner, in `test/text.test.ts`.
 - `pnpm test:browser`: the element in a browser, with Playwright, on the test pages in `test/fixtures` (served by Vite): keys, clicks, scroll and glide, both views, the paragraph mode, the attributes, where it reads from, `persist`, the dark scheme, reduced motion, and on a phone a tap, a swipe and full screen. Extraction from a page (`blocksFromElement`) is tested there too, on a real DOM.
 - `pnpm test`: both.
 
-Locally the browser tests run in the Chrome installed on the machine, as a desktop window and as a phone, so nothing is downloaded. `FR_BROWSERS=all pnpm test:browser` adds Playwright's Firefox and WebKit, once installed with `pnpm exec playwright install firefox webkit`; CI (`CI=1`) runs all of them, with Playwright's Chromium in place of Chrome.
+Locally the browser tests run in the Chrome installed on the machine, as a desktop window and as a phone, so nothing is downloaded. `FR_BROWSERS=all pnpm test:browser` adds Playwright's Firefox and WebKit, once installed with `pnpm exec playwright install firefox webkit`; CI (`CI=1`) runs all of them, with Playwright's Chromium in place of Chrome: `.github/workflows/ci.yml`, on every push and pull request.
+
+## Licence
+
+MIT, see [LICENSE](LICENSE).

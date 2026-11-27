@@ -1,0 +1,10 @@
+# Its own once the package has a repository of its own (elchdl's root .gitignore covers it until then)
+node_modules/
+dist/
+*.tgz
+test-results/
+playwright-report/
+test/astro/dist/
+test/astro/.astro/
+.DS_Store
+demo-dist/
