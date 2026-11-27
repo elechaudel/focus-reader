@@ -190,6 +190,58 @@ test.describe('attributes', () => {
   });
 });
 
+test.describe('a short panel: a phone on its side', () => {
+  // an iPhone held sideways, once Safari's bar, the notch and the home bar are taken off
+  test.use({ viewport: { width: 750, height: 308 } });
+
+  /** What the panel shows between its rulers and under the band, in px. */
+  const room = (page: import('@playwright/test').Page) =>
+    page.evaluate(() => {
+      const r = document.querySelector('focus-reader')!.shadowRoot!;
+      const rect = (s: string) => r.querySelector(s)!.getBoundingClientRect();
+      const context = r.querySelector<HTMLElement>('[data-context]')!;
+      const text = r.querySelector<HTMLElement>('[data-text]')!;
+      return {
+        window: rect('.window').height,
+        flowLine: parseFloat(getComputedStyle(text).lineHeight),
+        context: getComputedStyle(context).display === 'none' ? 0 : rect('[data-context]').height,
+        contextBottom: rect('[data-context]').bottom,
+        contextLine: parseFloat(getComputedStyle(context).lineHeight),
+        belowBottom: rect('.below').bottom,
+      };
+    });
+
+  test('Sequence: the sentence under the band shows whole lines, inside its row', async ({ page }) => {
+    await load(page, 'modal');
+    await open(page);
+    await act(page, 'play');
+    await act(page, 'play');
+    expect((await state(page)).context).not.toBe('');
+    const m = await room(page);
+    if (m.context) {
+      expect(m.contextBottom).toBeLessThanOrEqual(m.belowBottom + 0.5);
+      const lines = m.context / m.contextLine;
+      expect(Math.abs(lines - Math.round(lines))).toBeLessThan(0.05);
+    }
+  });
+
+  test('Flow: three lines or more between the rulers', async ({ page }) => {
+    await load(page, 'modal&view=flow');
+    await open(page);
+    const m = await room(page);
+    expect(m.window / m.flowLine).toBeGreaterThanOrEqual(3);
+  });
+
+  test('a paragraph at a time: three lines or more between the rulers', async ({ page }) => {
+    await load(page, 'modal&view=flow&words=6');
+    await open(page);
+    await act(page, 'words+');
+    expect((await state(page)).words).toBe('¶');
+    const m = await room(page);
+    expect(m.window / m.flowLine).toBeGreaterThanOrEqual(3);
+  });
+});
+
 test.describe('the text it reads', () => {
   test('`for`: the element of the page it names', async ({ page }) => {
     await load(page);

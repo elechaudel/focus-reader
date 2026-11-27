@@ -43,6 +43,8 @@ const FLOW_ANCHOR = 0.38;
 /** …and a paragraph's middle, a little above the window's (its first line never above PARA_TOP) */
 const FLOW_ANCHOR_PARA = 0.45;
 const PARA_TOP = 0.08;
+/** Flow's text is never so large that fewer lines than this show between the rulers (a phone on its side) */
+const FLOW_LINES = 3.2;
 
 const SIZES: Size[] = ['s', 'm', 'l', 'xl'];
 /** text size as a share of the panel (its width, at least 560 px, or 1.6 × its height if that is smaller) */
@@ -261,6 +263,11 @@ dialog button, dialog .seek { touch-action: manipulation; }
   .figure { font-size: 20px; }
   .context { -webkit-line-clamp: 2; }
   .below { padding-top: 8px; }
+}
+/* a phone on its side: the figures without their labels (still read out), Flow's window up to its rulers */
+@container (max-height: 360px) {
+  .stat .label, .progress-head { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .flow { padding: 4px 0; }
 }
 /* Flow: the whole text between the rulers, moving up a line at a time */
 .flow { display: none; grid-row: 1 / -1; min-height: 0; outline: none; touch-action: manipulation; user-select: none; -webkit-user-select: none; padding: 16px 0; }
@@ -882,12 +889,35 @@ export class FocusReader extends HTMLElement {
     this.#fr.style.setProperty('--marker', `${MARKER[this.#s.view === 'flow' ? 'left' : this.#s.align] * 100}%`);
     if (this.#s.view === 'flow') {
       const [base, share] = FLOW_SIZE[this.#s.size];
-      this.#fr.style.setProperty('--flow-size', `${Math.round(base + share * w)}px`);
+      const cs = getComputedStyle(this.#text);
+      const leading = parseFloat(cs.lineHeight) / parseFloat(cs.fontSize) || 1.22;
+      const fit = Math.floor(this.#text.parentElement!.clientHeight / (leading * FLOW_LINES));
+      this.#fr.style.setProperty('--flow-size', `${Math.max(12, Math.min(Math.round(base + share * w), fit))}px`);
       this.#flowTop = -1;
-    }
+    } else this.#fitContext();
     this.#show(false);
   }
 
+
+  /**
+   * The sentence under the band shows whole lines only: as many as its row holds, up to the CSS's own clamp, or
+   * none at all rather than letters cut in half.
+   */
+  #fitContext() {
+    const c = this.#context;
+    c.style.removeProperty('-webkit-line-clamp');
+    c.style.removeProperty('display');
+    const below = c.parentElement!;
+    const cs = getComputedStyle(c);
+    const room = below.clientHeight - parseFloat(getComputedStyle(below).paddingTop);
+    const most = parseInt(cs.webkitLineClamp, 10) || 4;
+    const lh = parseFloat(cs.lineHeight);
+    // the last line's leading under its letters can be cut: no letter is
+    const leading = (lh - parseFloat(cs.fontSize)) / 2;
+    const lines = Math.min(most, Math.floor((room + leading) / lh));
+    if (lines < 1) c.style.display = 'none';
+    else if (lines < most) c.style.setProperty('-webkit-line-clamp', String(lines));
+  }
 
   #sizePx(size: Size) {
     const w = this.#fr.clientWidth;
