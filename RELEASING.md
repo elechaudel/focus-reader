@@ -29,8 +29,8 @@ npm's trusted publishing can only be set up for a package that exists, so 0.1.0 
 2. `npm login`, with two-factor authentication. The account's email address shows in the package's public metadata on npm.
 3. `pnpm publish`: it builds `dist/` first (`prepack`), and `publishConfig` points the exports at it. `pnpm pack` beforehand shows what goes out. (`pnpm release`, which is `changeset publish`, does the same and tags the version.)
 4. Tagged `v0.1.0` and pushed the tag.
-5. npm took it as a staged publish: until it is approved on npmjs.com, the package shows a placeholder, `0.0.0-stage`, and `npm view focus-reader version` does not give 0.1.0.
-6. The GitHub release `v0.1.0` was written by hand, from the changelog, as a draft: publish it once 0.1.0 is live on npm.
+5. npm took it as a staged publish: until Edgar approved it on npmjs.com, the package showed a placeholder, `0.0.0-stage`. 0.1.0 is now `latest`, its `dist/` identical to a build of `main`, and jsDelivr serves it.
+6. The GitHub release `v0.1.0` was written by hand, from the changelog, as a draft, to publish by hand.
 
 ## 4. Later releases
 
@@ -38,7 +38,7 @@ In this order, once 0.1.0 is live on npm (not before: with no changeset waiting,
 
 1. On npmjs.com, in the package's settings, add a trusted publisher: GitHub Actions, repository `elechaudel/focus-reader`, workflow `release.yml`.
 2. GitHub Actions may create pull requests (Settings, Actions, General; done).
-3. Turn the release workflow on, which until now does nothing: the repository variable `RELEASES` set to `on` (`gh variable set RELEASES --body on -R elechaudel/focus-reader`, or Settings, Secrets and variables, Actions).
+3. Turn the release workflow on: the repository variable `RELEASES` set to `on` (`gh variable set RELEASES --body on -R elechaudel/focus-reader`, or Settings, Secrets and variables, Actions; done, and a run with nothing to publish passed).
 
 From then on:
 
