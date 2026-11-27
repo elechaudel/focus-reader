@@ -1,35 +1,25 @@
 # Releasing
 
-focus-reader is built inside elchdl (`packages/focus-reader`) and gets its own repository at its first release. The steps below take it there, publish 0.1.0, then hand later releases to Changesets. Each step is Edgar's to run: creating the repository and publishing are not done for him.
+focus-reader was built inside elchdl (`packages/focus-reader`) and got its own repository before its first release. The steps below record how it got here, then publish 0.1.0, then hand later releases to Changesets. Each step is Edgar's to run or to give the go for: publishing is never done for him.
 
-## 1. Its own repository
+## 1. Its own repository (done, 27 November 2026)
 
-From elchdl's root, on an up-to-date `main`, split the package out with its history:
+- `git subtree split --prefix packages/focus-reader` in elchdl, from the branch of its last pull request, kept the package's 29 commits with the package at the root.
+- The commits' author and committer address became Edgar's GitHub `noreply` one (`git filter-branch --env-filter`), so no personal address goes public.
+- The messages lost their references to elchdl's issues (`Refs #62`, `Step 2 of #79`…), which elchdl keeps private and which GitHub would have linked to this repository's own issues (`git filter-branch --msg-filter`). A few code comments still name `#79` or a commit of elchdl's: they are not links.
+- The repository was created private, then the split pushed to `main` over SSH (the GitHub CLI's token cannot push workflow files).
 
-```sh
-git subtree split --prefix packages/focus-reader -b focus-reader-split
-```
+The whole history was then checked for personal data (addresses, paths, tokens, private projects): none. Make the repository public in its settings once ready, before the first release, so the package's `repository` link works.
 
-Create an empty repository on GitHub, `elechaudel/focus-reader` (the name `package.json` already points at; change `homepage`, `repository` and `bugs` if it differs), with no README, licence or .gitignore. Then push the split and drop the local branch:
-
-```sh
-git push git@github.com:elechaudel/focus-reader.git focus-reader-split:main
-git branch -D focus-reader-split
-```
-
-The history keeps elchdl's commit messages: `#79` and other numbers in them point at elchdl's issues, not the new repository's.
-
-## 2. First run there
+## 2. First run here (done, 27 November 2026)
 
 ```sh
-git clone git@github.com:elechaudel/focus-reader.git
-cd focus-reader
 pnpm install
-pnpm exec playwright install chromium firefox webkit
+pnpm exec playwright install chromium firefox webkit   # locally, only for FR_BROWSERS=all
 pnpm check && pnpm build && pnpm test
 ```
 
-`pnpm install` writes `pnpm-lock.yaml`; commit it and push. CI (`.github/workflows/ci.yml`) then runs the tests in Chromium, Firefox and WebKit on every push and pull request.
+`pnpm install` wrote `pnpm-lock.yaml`, committed with this file. Locally the tests run in the installed Chrome; CI (`.github/workflows/ci.yml`) runs them in Chromium, Firefox and WebKit on every push and pull request.
 
 ## 3. The first release, by hand
 
@@ -37,13 +27,13 @@ npm's trusted publishing can only be set up for a package that exists, so 0.1.0 
 
 1. In `package.json`, remove `"private": true`.
 2. `pnpm version-packages`: the waiting changeset (`.changeset/first-release.md`) makes the version 0.1.0 and writes `CHANGELOG.md`. Commit both and push.
-3. `npm login`, with two-factor authentication on the account.
+3. `npm login`, with two-factor authentication on the account. The account's email address shows in the package's public metadata on npm: use one you are happy to show.
 4. `pnpm publish`: it builds `dist/` first (`prepack`), and `publishConfig` points the exports at it. `pnpm pack` beforehand shows what goes out.
 5. Tag it: `git tag v0.1.0 && git push --tags`.
 
 ## 4. Later releases
 
-On npmjs.com, in the package's settings, add a trusted publisher: GitHub Actions, repository `elechaudel/focus-reader`, workflow `release.yml`. From then on:
+On npmjs.com, in the package's settings, add a trusted publisher: GitHub Actions, repository `elechaudel/focus-reader`, workflow `release.yml`. Then turn the release workflow on, which until now does nothing: in the repository's settings, Secrets and variables, Actions, add the variable `RELEASES` set to `on` (or `gh variable set RELEASES --body on`). In Settings, Actions, General, allow GitHub Actions to create pull requests. From then on:
 
 - each change that users will notice comes with a changeset (`pnpm changeset`) in its pull request;
 - on `main`, the release workflow keeps a "Version packages" pull request up to date with the next version and its changelog;
@@ -60,6 +50,9 @@ Once 0.1.0 is on npm, elchdl uses it like any other package:
 3. Update `packages/README.md` and the line on the code in `DESIGN.md`'s Focus Reader section, which name `packages/focus-reader`.
 4. `pnpm check && pnpm build`, then compare the Lab page and the Feed's loop with the site before the switch: the site imports the same paths (`focus-reader`, `focus-reader/astro`, `focus-reader/astro/FocusReader.astro`, `virtual:focus-reader/theme.css`), now from `dist/`.
 
-## The demo
+## Still to decide
 
-`pnpm demo:build` writes the demo page to `demo-dist/`, a static folder. Where it is hosted (GitHub Pages, Netlify) is yet to decide.
+- Where the demo is hosted: `pnpm demo:build` writes it to `demo-dist/`, a static folder (GitHub Pages, Netlify).
+- Dependabot, for npm and GitHub Actions.
+- Conventional Commits: Changesets does not need them, the changelog comes from the changesets.
+- A scope on npm: `focus-reader` is unscoped; `@elechaudel/` exists already, an organisation only matters for several maintainers.

@@ -11,6 +11,9 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
   release:
+    # off until the first release is out by hand (RELEASING.md, steps 3 and 4): the repository variable RELEASES
+    # turns it on, so the waiting changeset does not open a "Version packages" pull request before then
+    if: vars.RELEASES == 'on'
     runs-on: ubuntu-latest
     permissions:
       contents: write
