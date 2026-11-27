@@ -1,6 +1,7 @@
 # Releases with Changesets: on main, while changesets are waiting, a "Version packages" pull request keeps the next
 # version and its changelog up to date; merging it publishes that version to npm, with provenance, through npm's
-# trusted publishing (no token: the package on npmjs.com trusts this workflow). See RELEASING.md.
+# trusted publishing (no token: the package on npmjs.com trusts this workflow), tags it vX.Y.Z and writes its GitHub
+# release from the changelog. See RELEASING.md.
 name: Release
 
 on:
@@ -38,6 +39,7 @@ jobs:
           publish: pnpm release
           title: Version packages
           commit: Version packages
+          createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: true

@@ -21,25 +21,32 @@ pnpm check && pnpm build && pnpm test
 
 `pnpm install` wrote `pnpm-lock.yaml`, committed with this file. Locally the tests run in the installed Chrome; CI (`.github/workflows/ci.yml`) runs them in Chromium, Firefox and WebKit on every push and pull request.
 
-## 3. The first release, by hand
+## 3. The first release, by hand (done, 27 November 2026)
 
-npm's trusted publishing can only be set up for a package that exists, so 0.1.0 goes out from your machine:
+npm's trusted publishing can only be set up for a package that exists, so 0.1.0 went out from Edgar's machine:
 
-1. In `package.json`, remove `"private": true`.
-2. `pnpm version-packages`: the waiting changeset (`.changeset/first-release.md`) makes the version 0.1.0 and writes `CHANGELOG.md`. Commit both and push.
-3. `npm login`, with two-factor authentication on the account. The account's email address shows in the package's public metadata on npm: use one you are happy to show.
-4. `pnpm publish`: it builds `dist/` first (`prepack`), and `publishConfig` points the exports at it. `pnpm pack` beforehand shows what goes out.
-5. Tag it: `git tag v0.1.0 && git push --tags`.
+1. In `package.json`, `"private": true` removed; `pnpm version-packages` made the version 0.1.0 and wrote `CHANGELOG.md` (commit `0.1.0`).
+2. `npm login`, with two-factor authentication. The account's email address shows in the package's public metadata on npm.
+3. `pnpm publish`: it builds `dist/` first (`prepack`), and `publishConfig` points the exports at it. `pnpm pack` beforehand shows what goes out. (`pnpm release`, which is `changeset publish`, does the same and tags the version.)
+4. Tagged `v0.1.0` and pushed the tag.
+5. npm took it as a staged publish: until it is approved on npmjs.com, the package shows a placeholder, `0.0.0-stage`, and `npm view focus-reader version` does not give 0.1.0.
+6. The GitHub release `v0.1.0` was written by hand, from the changelog, as a draft: publish it once 0.1.0 is live on npm.
 
 ## 4. Later releases
 
-On npmjs.com, in the package's settings, add a trusted publisher: GitHub Actions, repository `elechaudel/focus-reader`, workflow `release.yml`. Then turn the release workflow on, which until now does nothing: in the repository's settings, Secrets and variables, Actions, add the variable `RELEASES` set to `on` (or `gh variable set RELEASES --body on`). In Settings, Actions, General, allow GitHub Actions to create pull requests. From then on:
+In this order, once 0.1.0 is live on npm (not before: with no changeset waiting, the workflow publishes any version npm lacks):
+
+1. On npmjs.com, in the package's settings, add a trusted publisher: GitHub Actions, repository `elechaudel/focus-reader`, workflow `release.yml`.
+2. GitHub Actions may create pull requests (Settings, Actions, General; done).
+3. Turn the release workflow on, which until now does nothing: the repository variable `RELEASES` set to `on` (`gh variable set RELEASES --body on -R elechaudel/focus-reader`, or Settings, Secrets and variables, Actions).
+
+From then on:
 
 - each change that users will notice comes with a changeset (`pnpm changeset`) in its pull request;
 - on `main`, the release workflow keeps a "Version packages" pull request up to date with the next version and its changelog;
-- merging that pull request publishes the version to npm, with provenance, without a token.
+- merging that pull request publishes the version to npm, with provenance, without a token, tags it `vX.Y.Z` and writes its GitHub release from the changelog.
 
-Check the release workflow on its first run.
+Check the release workflow on its first run: that pnpm publishes through the trusted publisher, and whether npm stages the version again (then it waits for approval on npmjs.com, as 0.1.0 did).
 
 ## 5. Back in elchdl
 
