@@ -1,0 +1,818 @@
+---
+// The landing's live example: an article on elchdl, in a browser, on a device (an external monitor on wide and
+// medium windows, a phone on small ones). A Focus button on the article opens the reader over the page, as the
+// component does on a real site, only inside the device. A loop shows it: the page scrolls to the button, a
+// pointer presses it, the reader reads in Sequence, then in Flow, and closes. The loop stops from its button, or
+// at the first press in the device, so the reader is then the visitor's; it never starts when motion is reduced.
+import FocusReader from '../../../astro/FocusReader.astro';
+
+const HEADING = 'The focus reader';
+const URL = 'elchdl.com/lab/focus-reader';
+---
+
+<figure class="demo" data-demo>
+  <div class="device" data-focus-reader-scope>
+    <div class="frame">
+      <span class="cam" aria-hidden="true"></span>
+      <span class="island" aria-hidden="true"></span>
+      <span class="key key-action" aria-hidden="true"></span>
+      <span class="key key-up" aria-hidden="true"></span>
+      <span class="key key-down" aria-hidden="true"></span>
+      <span class="key key-side" aria-hidden="true"></span>
+
+      <div class="screen" data-screen>
+        <div class="status" aria-hidden="true">
+          <span class="clock">9:41</span>
+          <span class="signal"><i></i><i></i><i></i><i></i></span>
+          <span class="battery"></span>
+        </div>
+
+        <div class="browser">
+          <div class="chrome" aria-hidden="true">
+            <span class="lights"><i></i><i></i><i></i></span>
+            <span class="tab"><span class="tab-mark"></span>{HEADING} · elchdl</span>
+          </div>
+          <div class="address" aria-hidden="true">
+            <span class="arrows">‹ ›</span>
+            <span class="url"><span class="lock"></span>{URL}</span>
+          </div>
+
+          <div class="viewport">
+            <div class="page" data-page>
+              <div class="site-head" aria-hidden="true">
+                <span class="site-name"><span class="site-mark"></span>elchdl</span>
+                <span class="site-nav"><span>Work</span><span class="on">Lab</span><span>Journal</span></span>
+              </div>
+              <article class="article">
+                <p class="kicker">Lab · 04 · 3 min</p>
+                <h2 class="headline">{HEADING}</h2>
+                <p class="dek">A text read a few words at a time, like subtitles, for an article to be read rather than skimmed.</p>
+                <div class="byline">
+                  <span>Edgar Lechaudel</span>
+                  <button type="button" class="btn launch" data-launch>Focus</button>
+                </div>
+                <div id="demo-article" class="body">
+                  <p>
+                    Most of what we read on a screen asks the eye to do two jobs at once: follow the words, and find its way back to the line after every glance
+                    away. The focus reader takes the second job off its hands. It shows the text a few words at a time, in the same place, at a pace you choose,
+                    and you only have to read.
+                  </p>
+                  <p>
+                    It has two views. Sequence puts each frame on a band between two rulers, one word or a few at a time. Flow shows the whole text and moves it
+                    up a line at a time, the words being read marked, the way an app shows the lyrics of a song.
+                  </p>
+                  <p>
+                    Reading back matters more than reading fast. Pause, and the sentence shows under the band; the arrows, a scroll or a swipe go a frame back or
+                    on. A comma makes a frame stay a beat longer, the end of a sentence two.
+                  </p>
+                  <p>
+                    It is a single custom element, with no dependency and no framework. Its colours and fonts come from custom properties, its words from a
+                    labels attribute, so it fits a page and speaks its language.
+                  </p>
+                </div>
+              </article>
+            </div>
+
+            <div class="sheet" data-sheet inert>
+              <FocusReader for="demo-article" heading={HEADING} inline />
+            </div>
+          </div>
+
+          <div class="home-bar" aria-hidden="true"></div>
+        </div>
+
+        <span class="pointer" data-pointer aria-hidden="true"></span>
+      </div>
+
+    </div>
+  </div>
+
+  <figcaption class="controls">
+    <button type="button" class="btn loop" data-loop aria-pressed="false" hidden>
+      <span class="dot" aria-hidden="true"></span><span data-loop-label>Stop the demo</span>
+    </button>
+    <span class="type-label hint" data-hint>A live reader: press anywhere in the page to take over.</span>
+  </figcaption>
+</figure>
+
+<script>
+  import type { FocusReader } from '../../../src/element';
+
+  const LABEL = { on: 'Stop the demo', off: 'Play the demo' };
+  const HINT = {
+    on: 'A live reader: press anywhere in the page to take over.',
+    off: 'Your turn: open it from the article, play, pause, change the view.',
+  };
+
+  for (const demo of document.querySelectorAll<HTMLElement>('[data-demo]')) {
+    const q = <T extends Element = HTMLElement>(s: string) => demo.querySelector<T>(s)!;
+    const device = q('.device');
+    const screen = q('[data-screen]');
+    const page = q('[data-page]');
+    const sheet = q('[data-sheet]');
+    const launch = q<HTMLButtonElement>('[data-launch]');
+    const pointer = q('[data-pointer]');
+    const loopBtn = q<HTMLButtonElement>('[data-loop]');
+    const loopLabel = q('[data-loop-label]');
+    const hint = q('[data-hint]');
+    const reader = q<FocusReader>('focus-reader');
+
+    // Over the page, the reader stands for the full-window panel: its door closes it, back to the article.
+    reader.labels = { fullScreen: 'Close', fullScreenLabel: 'Close the reader' };
+    const inShadow = (s: string) => reader.shadowRoot?.querySelector<HTMLElement>(s) ?? null;
+
+    const openSheet = (on: boolean) => {
+      sheet.toggleAttribute('data-open', on);
+      sheet.inert = !on;
+      page.inert = on;
+      if (!on) reader.pause();
+    };
+    launch.addEventListener('click', () => openSheet(true));
+    reader.addEventListener(
+      'click',
+      (e) => {
+        const door = inShadow('[data-door]');
+        if (door && e.composedPath().includes(door)) {
+          e.stopPropagation();
+          openSheet(false);
+          if (e.isTrusted) launch.focus();
+        }
+      },
+      true,
+    );
+
+    // ——— the loop
+
+    let wanted = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let visible = false;
+    let run = 0; // the current loop's number: a step of an older one stops at its next wait
+
+    class Stopped extends Error {}
+    const wait = (ms: number, id: number) =>
+      new Promise<void>((done, fail) => setTimeout(() => (id === run ? done() : fail(new Stopped())), ms));
+
+    /** Where an element sits in the screen, its centre. */
+    const centre = (el: Element) => {
+      const s = screen.getBoundingClientRect();
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2 - s.left, y: r.top + r.height / 2 - s.top };
+    };
+    const rest = () => ({ x: screen.clientWidth * 0.78, y: screen.clientHeight * 0.86 });
+    const place = (p: { x: number; y: number }) => {
+      pointer.style.translate = `${Math.round(p.x)}px ${Math.round(p.y)}px`;
+    };
+    const press = async (el: Element | null, id: number) => {
+      if (!el) return;
+      place(centre(el));
+      await wait(900, id);
+      pointer.classList.add('down');
+      await wait(160, id);
+      pointer.classList.remove('down');
+    };
+    const toStart = () => {
+      const seek = inShadow('[data-seek]') as HTMLInputElement | null;
+      if (seek) {
+        seek.value = '0';
+        seek.dispatchEvent(new Event('input'));
+      }
+    };
+    const reset = () => {
+      openSheet(false);
+      reader.setAttribute('view', 'sequence');
+      toStart();
+      page.scrollTo({ top: 0 });
+      pointer.classList.add('instant');
+      place(rest());
+      pointer.getBoundingClientRect();
+      pointer.classList.remove('instant');
+    };
+
+    const cycle = async (id: number) => {
+      reset();
+      await wait(1400, id);
+      // the button in view, a little under the top
+      const top = launch.getBoundingClientRect().top - page.getBoundingClientRect().top + page.scrollTop;
+      page.scrollTo({ top: Math.max(0, top - page.clientHeight * 0.4), behavior: 'smooth' });
+      await wait(800, id);
+      await press(launch, id);
+      openSheet(true);
+      await wait(900, id);
+      place(rest());
+      reader.play();
+      await wait(9000, id);
+      await press(inShadow('[data-act="view"]'), id);
+      reader.setAttribute('view', 'flow');
+      reader.play();
+      place(rest());
+      await wait(9000, id);
+      reader.pause();
+      await wait(500, id);
+      await press(inShadow('[data-door]'), id);
+      openSheet(false);
+      await wait(1200, id);
+    };
+
+    const update = () => {
+      const on = wanted && visible;
+      const was = demo.hasAttribute('data-playing');
+      demo.toggleAttribute('data-playing', on);
+      loopBtn.setAttribute('aria-pressed', String(wanted));
+      loopLabel.textContent = wanted ? LABEL.on : LABEL.off;
+      hint.textContent = wanted ? HINT.on : HINT.off;
+      if (on === was) return;
+      const id = ++run;
+      if (!on) return;
+      (async () => {
+        try {
+          while (id === run) await cycle(id);
+        } catch (e) {
+          if (!(e instanceof Stopped)) throw e;
+        }
+      })();
+    };
+
+    /** The visitor takes over: the loop stops where it is, the reader as it was. */
+    const takeOver = () => {
+      if (!wanted) return;
+      wanted = false;
+      update();
+    };
+    // a real press anywhere in the device, before the reader or the page reacts to it
+    device.addEventListener('pointerdown', (e) => e.isTrusted && takeOver(), true);
+    device.addEventListener('keydown', (e) => e.isTrusted && takeOver(), true);
+    device.addEventListener('wheel', (e) => e.isTrusted && takeOver(), { capture: true, passive: true });
+    device.addEventListener('touchstart', (e) => e.isTrusted && takeOver(), { capture: true, passive: true });
+
+    loopBtn.hidden = false;
+    loopBtn.addEventListener('click', () => {
+      wanted = !wanted;
+      if (!wanted) reader.pause();
+      update();
+    });
+
+    // only while it shows: out of view it waits, and starts again from the top
+    new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      update();
+    }, { threshold: 0.25 }).observe(device);
+    // the pointer keeps its place when the device changes size (a monitor turned phone)
+    new ResizeObserver(() => {
+      if (!demo.hasAttribute('data-playing')) return;
+      pointer.classList.add('instant');
+      place(rest());
+      pointer.getBoundingClientRect();
+      pointer.classList.remove('instant');
+    }).observe(screen);
+  }
+</script>
+
+<style>
+  /* ——— the stage */
+  /* a wireframe: hairlines on the page's paper, the bezel a thin band of surface */
+  .demo {
+    --bezel: var(--color-surface);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0;
+  }
+  .device {
+    position: relative;
+    width: 100%;
+    max-width: 62rem;
+  }
+  .frame {
+    position: relative;
+    padding: 12px 8px 8px;
+    border: var(--spacing-hairline) solid var(--color-ink);
+    border-radius: var(--rounded-panel);
+    background: var(--bezel);
+  }
+  .screen {
+    position: relative;
+    aspect-ratio: 16 / 9.4;
+    overflow: hidden;
+    border: var(--spacing-hairline) solid var(--color-ink);
+    background: var(--color-paper);
+  }
+
+  /* the monitor: only its webcam, in the top bezel */
+  .cam {
+    position: absolute;
+    top: 3px;
+    left: 50%;
+    width: 6px;
+    height: 6px;
+    margin-left: -3px;
+    border: var(--spacing-hairline) solid var(--color-ink);
+    border-radius: 50%;
+  }
+  /* the phone's own parts, hidden on the monitor */
+  .island,
+  .key,
+  .status,
+  .home-bar {
+    display: none;
+  }
+
+  /* ——— the browser: the window's bar with its tab, then the address */
+  .browser {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    background: var(--color-paper-deep);
+  }
+  .chrome {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--spacing-md);
+    padding: 8px 12px 0;
+    font-family: var(--type-label-family);
+    font-size: var(--type-label-sm-size);
+    color: var(--color-text-muted);
+  }
+  .lights {
+    display: flex;
+    gap: 6px;
+    padding-bottom: 9px;
+  }
+  .lights i {
+    width: 8px;
+    height: 8px;
+    border: var(--spacing-hairline) solid var(--color-ink);
+  }
+  .lights i:nth-child(1) {
+    background: var(--color-vermillon);
+  }
+  .lights i:nth-child(2) {
+    background: var(--color-citron);
+  }
+  .lights i:nth-child(3) {
+    background: var(--color-anis);
+  }
+  .tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 16rem;
+    margin-bottom: -1px;
+    padding: 7px 14px;
+    border: var(--spacing-hairline) solid var(--color-ink);
+    border-bottom: 0;
+    background: var(--color-surface);
+    color: var(--color-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tab-mark,
+  .site-mark {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    background:
+      linear-gradient(var(--color-cobalt), var(--color-cobalt)) 0 0 / 50% 50% no-repeat,
+      linear-gradient(var(--color-ink), var(--color-ink)) 100% 0 / 50% 50% no-repeat,
+      linear-gradient(var(--color-ink), var(--color-ink)) 0 100% / 50% 50% no-repeat,
+      linear-gradient(var(--color-text-faint), var(--color-text-faint)) 100% 100% / 50% 50% no-repeat;
+  }
+  .address {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: 6px 12px;
+    border-top: var(--spacing-hairline) solid var(--color-ink);
+    border-bottom: var(--spacing-hairline) solid var(--color-ink);
+    background: var(--color-surface);
+    font-family: var(--type-label-family);
+    font-size: var(--type-label-sm-size);
+    color: var(--color-text-muted);
+  }
+  .arrows {
+    letter-spacing: 0.4em;
+  }
+  .url {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    padding: 4px 10px;
+    border: var(--spacing-hairline) solid var(--color-rule);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .lock {
+    flex: none;
+    width: 7px;
+    height: 6px;
+    margin-top: 3px;
+    background: var(--color-text-muted);
+    box-shadow: 0 -2px 0 -1px var(--color-paper), 0 -3px 0 0 var(--color-text-muted);
+    border-radius: 1px;
+  }
+
+  /* ——— the page: an article on elchdl */
+  .viewport {
+    position: relative;
+    min-height: 0;
+    background: var(--color-paper);
+  }
+  .page {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-text-faint) transparent;
+  }
+  .site-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 40px;
+    padding-inline: 5%;
+    border-bottom: var(--spacing-hairline) solid var(--color-ink);
+  }
+  .site-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--type-headline-sm-family);
+    font-size: 1.125rem;
+    line-height: 1;
+    color: var(--color-ink);
+  }
+  .site-mark {
+    width: 12px;
+    height: 12px;
+  }
+  .site-nav {
+    display: flex;
+    gap: var(--spacing-md);
+    font-family: var(--type-label-family);
+    font-size: var(--type-label-sm-size);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+  .site-nav .on {
+    color: var(--color-ink);
+    box-shadow: inset 0 -1px var(--color-ink);
+  }
+  .article {
+    max-width: 36rem;
+    margin-inline: auto;
+    padding: var(--spacing-xl) 5% var(--spacing-section);
+  }
+  .kicker {
+    font-family: var(--type-label-family);
+    font-size: var(--type-label-size);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+  .kicker::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 8px;
+    background: var(--accent);
+  }
+  .headline {
+    margin-top: var(--spacing-md);
+    font-family: var(--type-headline-lg-family);
+    font-size: clamp(2rem, 4.2vw, var(--type-headline-lg-size));
+    font-weight: 400;
+    line-height: 1;
+    color: var(--color-ink);
+  }
+  .dek {
+    margin-top: var(--spacing-md);
+    font-size: var(--type-lead-size);
+    line-height: var(--type-lead-line-height);
+    color: var(--color-text);
+  }
+  .byline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-lg);
+    padding-block: var(--spacing-sm);
+    border-block: var(--spacing-hairline) solid var(--color-ink);
+    font-family: var(--type-label-family);
+    font-size: var(--type-label-size);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+  .launch::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    background: var(--accent);
+    border: var(--spacing-hairline) solid var(--color-ink);
+  }
+  .body {
+    margin-top: var(--spacing-lg);
+    font-size: var(--type-body-size);
+    line-height: 1.6;
+    color: var(--color-text-strong);
+  }
+  .body p + p {
+    margin-top: 1em;
+  }
+
+  /* ——— the reader over the page, as the full-window panel is over a real one */
+  .sheet {
+    position: absolute;
+    inset: 0;
+    background: var(--color-paper);
+    visibility: hidden;
+    opacity: 0;
+    translate: 0 12px;
+  }
+  .sheet[data-open] {
+    visibility: visible;
+    opacity: 1;
+    translate: 0 0;
+  }
+  .sheet :global(focus-reader) {
+    height: 100%;
+    min-height: 0;
+  }
+
+  /* ——— the pointer the loop moves: an arrow on the monitor, a fingertip on the phone */
+  .pointer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 5;
+    width: 18px;
+    height: 18px;
+    pointer-events: none;
+    opacity: 0;
+    background: var(--color-ink);
+    clip-path: polygon(0 0, 0 78%, 22% 60%, 38% 96%, 52% 90%, 37% 55%, 66% 55%);
+    filter: drop-shadow(0 0 0 var(--color-paper));
+    transition:
+      translate 0.9s cubic-bezier(0.65, 0, 0.35, 1),
+      opacity 0.3s ease,
+      scale 0.15s ease;
+  }
+  .pointer.instant {
+    transition: none;
+  }
+  .pointer.down {
+    scale: 0.82;
+  }
+  [data-playing] .pointer {
+    opacity: 1;
+  }
+
+  /* ——— under the device: the loop's switch and what to do */
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm) var(--spacing-md);
+    margin-top: var(--spacing-lg);
+    text-align: center;
+  }
+  .hint {
+    color: var(--color-text-muted);
+  }
+  .loop .dot {
+    width: 7px;
+    height: 7px;
+    border: var(--spacing-hairline) solid currentColor;
+  }
+  [data-playing] .loop .dot {
+    background: var(--accent);
+    border-color: var(--color-ink);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .sheet {
+      transition:
+        opacity 0.3s ease,
+        translate 0.3s ease,
+        visibility 0s linear 0.3s;
+    }
+    .sheet[data-open] {
+      transition:
+        opacity 0.3s ease,
+        translate 0.3s ease;
+    }
+    [data-playing] .loop .dot {
+      animation: blink 1.6s steps(2, jump-none) infinite;
+    }
+  }
+  @keyframes blink {
+    50% {
+      opacity: 0.25;
+    }
+  }
+
+  /* ——— on a phone: a phone, its buttons on its sides, the island, the bars of a mobile browser */
+  @media (max-width: 640px) {
+    .device {
+      width: min(100%, 320px);
+    }
+    .frame {
+      padding: 10px;
+      border-radius: 46px;
+    }
+    .screen {
+      aspect-ratio: 9 / 19;
+      border-radius: 36px;
+    }
+    .cam,
+    .chrome,
+    .arrows {
+      display: none;
+    }
+    .island {
+      display: block;
+      position: absolute;
+      top: 21px;
+      left: 50%;
+      z-index: 6;
+      width: 84px;
+      height: 24px;
+      translate: -50% 0;
+      border: var(--spacing-hairline) solid var(--color-ink);
+      border-radius: var(--rounded-pill);
+      background: var(--color-paper);
+    }
+    .island::after {
+      content: '';
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      width: 8px;
+      height: 8px;
+      border: var(--spacing-hairline) solid var(--color-ink);
+      border-radius: 50%;
+    }
+    .key {
+      display: block;
+      position: absolute;
+      width: 4px;
+      border: var(--spacing-hairline) solid var(--color-ink);
+      background: var(--bezel);
+    }
+    .key-action,
+    .key-up,
+    .key-down {
+      left: -5px;
+      border-right: 0;
+      border-radius: 2px 0 0 2px;
+    }
+    .key-action {
+      top: 96px;
+      height: 26px;
+    }
+    .key-up {
+      top: 140px;
+      height: 46px;
+    }
+    .key-down {
+      top: 196px;
+      height: 46px;
+    }
+    .key-side {
+      top: 158px;
+      right: -5px;
+      height: 72px;
+      border-left: 0;
+      border-radius: 0 2px 2px 0;
+    }
+
+    /* under the status bar: the page, then the address and the home bar */
+    .browser {
+      top: 46px;
+      grid-template-rows: minmax(0, 1fr) auto auto;
+      background: var(--color-surface);
+    }
+    .viewport {
+      grid-row: 1;
+    }
+    .status {
+      position: absolute;
+      inset: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 46px;
+      padding: 6px 26px 0 30px;
+      font-family: var(--type-label-family);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--color-ink);
+      background: var(--color-paper);
+    }
+    .clock {
+      margin-right: auto;
+    }
+    .signal {
+      display: inline-flex;
+      align-items: flex-end;
+      gap: 1.5px;
+      height: 10px;
+    }
+    .signal i {
+      width: 3px;
+      background: var(--color-ink);
+    }
+    .signal i:nth-child(1) {
+      height: 4px;
+    }
+    .signal i:nth-child(2) {
+      height: 6px;
+    }
+    .signal i:nth-child(3) {
+      height: 8px;
+    }
+    .signal i:nth-child(4) {
+      height: 10px;
+    }
+    .battery {
+      position: relative;
+      width: 22px;
+      height: 11px;
+      margin-left: 4px;
+      border: var(--spacing-hairline) solid var(--color-ink);
+      border-radius: 3px;
+      background: linear-gradient(var(--color-ink), var(--color-ink)) 1px 1px / 72% calc(100% - 2px) no-repeat;
+    }
+    .battery::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      right: -3px;
+      width: 2px;
+      height: 3px;
+      background: var(--color-ink);
+    }
+    /* the address at the bottom, under the page */
+    .address {
+      grid-row: 2;
+      padding: 8px 14px 4px;
+      border-bottom: 0;
+      justify-content: center;
+    }
+    .url {
+      justify-content: center;
+      padding: 7px 10px;
+    }
+    .home-bar {
+      display: block;
+      grid-row: 3;
+      width: 36%;
+      height: 4px;
+      margin: 8px auto 8px;
+      border-radius: var(--rounded-pill);
+      background: var(--color-ink);
+    }
+    .site-head {
+      padding-inline: var(--spacing-md);
+    }
+    .site-nav span:not(.on) {
+      display: none;
+    }
+    .article {
+      padding: var(--spacing-lg) var(--spacing-md) var(--spacing-xl);
+    }
+    .headline {
+      font-size: 2.25rem;
+    }
+    .dek {
+      font-size: var(--type-body-size);
+    }
+    .body {
+      font-size: var(--type-body-sm-size);
+    }
+    /* a fingertip, pressed */
+    .pointer {
+      width: 30px;
+      height: 30px;
+      margin: -15px 0 0 -15px;
+      clip-path: none;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--color-ink) 28%, transparent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-ink) 40%, transparent);
+    }
+    .pointer.down {
+      scale: 0.7;
+      background: color-mix(in srgb, var(--color-ink) 45%, transparent);
+    }
+  }
+</style>

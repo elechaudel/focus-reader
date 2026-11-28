@@ -1,8 +1,8 @@
 ---
 // The landing: what it is and how to get it, with a reader in the page to try at once.
 import { Code } from 'astro:components';
-import FocusReader from '../../../astro/FocusReader.astro';
 import Base from '../layouts/Base.astro';
+import DeviceDemo from '../components/DeviceDemo.astro';
 import Install from '../components/Install.astro';
 import { GITHUB, NPM, url } from '../lib/url';
 
@@ -52,30 +52,8 @@ import FocusReader from 'focus-reader/astro/FocusReader.astro';
       </p>
     </div>
     <div class="stage">
-      <div class="tile">
-        <FocusReader for="pitch" heading="focus-reader" inline />
-      </div>
+      <DeviceDemo />
     </div>
-    <template id="pitch">
-      <p>
-        Most of what we read on a screen asks the eye to do two jobs at once: follow the words, and find its way back to the line after every glance away.
-        The focus reader takes the second job off its hands. It shows the text a few words at a time, in the same place, at a pace you choose, and you only
-        have to read.
-      </p>
-      <p>
-        It has two views. Sequence puts each frame on a band between two rulers, one word or a few at a time. Flow shows the whole text and moves it up a
-        line at a time, the words being read marked, the way an app shows the lyrics of a song. In Flow, a frame can also be a whole paragraph, with a line
-        in the margin that fills as its time goes.
-      </p>
-      <p>
-        Reading back matters more than reading fast. Pause, and the sentence shows under the band; the arrows, a scroll or a swipe go a frame back or on. A
-        comma makes a frame stay a beat longer, the end of a sentence two, and the whole is scaled so the rate shown is the rate you get.
-      </p>
-      <p>
-        It is a single custom element, with no dependency and no framework. Its colours and fonts come from custom properties, its words from a labels
-        attribute, so it fits a page and speaks its language.
-      </p>
-    </template>
   </section>
 
   <section class="column">
@@ -140,7 +118,7 @@ import FocusReader from 'focus-reader/astro/FocusReader.astro';
     margin-top: var(--spacing-section);
   }
 
-  /* the pitch centred, the reader under it across the column */
+  /* the pitch centred, the device with its reader under it */
   .hero {
     margin-top: var(--spacing-page-y);
   }
@@ -186,9 +164,6 @@ import FocusReader from 'focus-reader/astro/FocusReader.astro';
     justify-content: center;
     gap: var(--spacing-sm);
     margin-top: var(--spacing-lg);
-  }
-  .stage .tile {
-    height: 520px;
   }
 
   .points {
@@ -301,9 +276,6 @@ import FocusReader from 'focus-reader/astro/FocusReader.astro';
     .next .door + .door {
       border-left: 0;
       border-top: var(--spacing-hairline) solid var(--color-ink);
-    }
-    .stage .tile {
-      height: 440px;
     }
   }
 </style>
